@@ -214,49 +214,146 @@ if 'password_manager' not in st.session_state:
     }
 
 class TradingSignalBot:
-    """Trading signal bot"""
+    """Trading signal bot with multiple data source fallbacks"""
     
-def __init__(self):
-    # List of alternative Binance hosts that might work
-    self.hosts = [
-        'https://data-api.binance.vision',
-        'https://api1.binance.com',
-        'https://api2.binance.com',
-        'https://api3.binance.com',
-        'https://api.binance.com'
-    ]
-    self.current_host_index = 0
-    self._init_exchange()
+    def __init__(self):
+        self.data_sources = []
+        self.current_source = 0
+        self._init_data_sources()
     
-def _init_exchange(self):
-    """Initialize exchange with current host"""
-    self.exchange = ccxt.binance({
-        'enableRateLimit': True,
-        'options': {'defaultType': 'future'},
-        'urls': {
-            'api': {
-                'public': f'{self.hosts[self.current_host_index]}/api/v3'
-            }
-        }
-    })
+    def _init_data_sources(self):
+        """Initialize multiple data source options"""
+        
+        # Option 1: Binance public data (using ccxt with custom URL)
+        try:
+            binance_public = ccxt.binance({
+                'enableRateLimit': True,
+                'options': {'defaultType': 'future'},
+                'urls': {
+                    'api': {
+                        'public': 'https://data-api.binance.vision/api/v3',
+                        'private': 'https://data-api.binance.vision/api/v3',
+                    }
+                }
+            })
+            self.data_sources.append(('binance_public', binance_public))
+        except:
+            pass
+        
+        # Option 2: Regular binance (might work in some regions)
+        try:
+            binance_reg = ccxt.binance({
+                'enableRateLimit': True,
+                'options': {'defaultType': 'future'}
+            })
+            self.data_sources.append(('binance', binance_reg))
+        except:
+            pass
+        
+        # Option 3: Bybit (good alternative, works globally)
+        try:
+            bybit = ccxt.bybit({
+                'enableRateLimit': True,
+                'options': {'defaultType': 'future'}
+            })
+            self.data_sources.append(('bybit', bybit))
+        except:
+            pass
+        
+        # Option 4: Kraken Futures (another global option)
+        try:
+            kraken = ccxt.krakenfutures({
+                'enableRateLimit': True,
+            })
+            self.data_sources.append(('kraken', kraken))
+        except:
+            pass
+        
+        # Option 5: OKX (works in most regions)
+        try:
+            okx = ccxt.okx({
+                'enableRateLimit': True,
+                'options': {'defaultType': 'future'}
+            })
+            self.data_sources.append(('okx', okx))
+        except:
+            pass
+    
+    def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
+        """Try multiple data sources until one works"""
+        
+        # Try each data source in order
+        for source_name, exchange in self.data_sources:
+            try:
+                # Try to fetch OHLCV data
+                ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+                
+                if ohlcv and len(ohlcv) > 0:
+                    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                    df.set_index('timestamp', inplace=True)
+                    
+                    # Log success (optional)
+                    print(f"Successfully fetched data from {source_name}")
+                    return df
+                    
+            except Exception as e:
+                # If this source fails, try the next one
+                print(f"Failed to fetch from {source_name}: {str(e)[:50]}...")
+                continue
+        
+        # If all sources fail
+        st.error("Could not fetch market data from any provider. Please try again later.")
+        return None
+    
+def _format_symbol(self, symbol, source_name):
+    """Format symbol based on exchange requirements"""
+    if source_name in ['bybit', 'okx']:
+        # Bybit and OKX use USDT perpetual format
+        return symbol.replace('/', '')  # BTC/USDT -> BTCUSDT
+    elif source_name == 'kraken':
+        # Kraken uses different format
+        base, quote = symbol.split('/')
+        return f"{base}{quote}"  # BTCUSDT
+    else:
+        # Binance works with standard format
+        return symbol
 
 def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
-    """Fetch with fallback to different hosts"""
-    for attempt in range(len(self.hosts)):
+    """Try multiple data sources until one works"""
+    
+    # Try each data source in order
+    for source_name, exchange in self.data_sources:
         try:
-            self._init_exchange()
-            ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-            df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            df.set_index('timestamp', inplace=True)
-            return df
+            # Format symbol for this exchange
+            formatted_symbol = self._format_symbol(symbol, source_name)
+            
+            # Try to fetch OHLCV data
+            ohlcv = exchange.fetch_ohlcv(formatted_symbol, timeframe, limit=limit)
+            
+            if ohlcv and len(ohlcv) > 0:
+                df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                df.set_index('timestamp', inplace=True)
+                
+                # Optional: Show which source is working (can remove in production)
+                st.caption(f"📡 Data source: {source_name}")
+                return df
+                
         except Exception as e:
-            if "451" in str(e) and attempt < len(self.hosts) - 1:
-                self.current_host_index = (self.current_host_index + 1) % len(self.hosts)
-                continue
-            else:
-                st.error(f"Error fetching data from all hosts: {e}")
-                return None
+            # If this source fails, try the next one
+            continue
+    
+    # If all sources fail
+    st.error("""
+    ⚠️ Could not fetch market data. This might be due to geographical restrictions.
+    
+    **Try:**
+    - Refresh the page
+    - Try again in a few minutes
+    - Contact admin if issue persists
+    """)
+    return None
     
     def calculate_indicators(self, df):
         df['ema_9'] = ta.trend.ema_indicator(df['close'], window=9)
