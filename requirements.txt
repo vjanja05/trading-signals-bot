@@ -1,0 +1,10 @@
+streamlit
+pandas
+numpy
+plotly
+ccxt
+ta
+python-dotenv
+qrcode
+pillow
+requests
