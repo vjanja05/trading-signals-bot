@@ -536,24 +536,6 @@ def get_bot():
 
 bot = get_bot()
 
-# Add this debug expander in your sidebar or main area
-with st.expander("🔧 Debug Info"):
-    st.write("**Available Data Sources:**")
-    if st.session_state.get('available_sources'):
-        for source in st.session_state.available_sources:
-            st.write(f"✅ {source}")
-    else:
-        st.write("❌ No sources available")
-    
-    if st.button("Test Connection"):
-        with st.spinner("Testing..."):
-            for name, exchange in bot.data_sources:
-                try:
-                    ticker = exchange.fetch_ticker('BTC/USDT')
-                    st.success(f"✅ {name}: BTC = ${ticker['last']}")
-                except Exception as e:
-                    st.error(f"❌ {name}: {str(e)[:100]}")
-
 # Create a directory for payment proofs if it doesn't exist
 PAYMENT_PROOFS_DIR = "payment_proofs"
 os.makedirs(PAYMENT_PROOFS_DIR, exist_ok=True)
@@ -871,6 +853,24 @@ with st.expander("👑 Admin Panel - Payment Proofs"):
         2. Click **View on BSCScan**
         3. Copy the Transaction Hash from the URL
         """)
+
+# Add this debug expander in your sidebar or main area
+with st.expander("🔧 Debug Info"):
+    st.write("**Available Data Sources:**")
+    if st.session_state.get('available_sources'):
+        for source in st.session_state.available_sources:
+            st.write(f"✅ {source}")
+    else:
+        st.write("❌ No sources available")
+    
+    if st.button("Test Connection"):
+        with st.spinner("Testing..."):
+            for name, exchange in bot.data_sources:
+                try:
+                    ticker = exchange.fetch_ticker('BTC/USDT')
+                    st.success(f"✅ {name}: BTC = ${ticker['last']}")
+                except Exception as e:
+                    st.error(f"❌ {name}: {str(e)[:100]}")
 
 # ===== MAIN CONTENT (Only for paid users) =====
 with col_right:
