@@ -306,55 +306,6 @@ class TradingSignalBot:
         st.error("Could not fetch market data from any provider. Please try again later.")
         return None
     
-def _format_symbol(self, symbol, source_name):
-    """Format symbol based on exchange requirements"""
-    if source_name in ['bybit', 'okx']:
-        # Bybit and OKX use USDT perpetual format
-        return symbol.replace('/', '')  # BTC/USDT -> BTCUSDT
-    elif source_name == 'kraken':
-        # Kraken uses different format
-        base, quote = symbol.split('/')
-        return f"{base}{quote}"  # BTCUSDT
-    else:
-        # Binance works with standard format
-        return symbol
-
-def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
-    """Try multiple data sources until one works"""
-    
-    # Try each data source in order
-    for source_name, exchange in self.data_sources:
-        try:
-            # Format symbol for this exchange
-            formatted_symbol = self._format_symbol(symbol, source_name)
-            
-            # Try to fetch OHLCV data
-            ohlcv = exchange.fetch_ohlcv(formatted_symbol, timeframe, limit=limit)
-            
-            if ohlcv and len(ohlcv) > 0:
-                df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-                df.set_index('timestamp', inplace=True)
-                
-                # Optional: Show which source is working (can remove in production)
-                st.caption(f"📡 Data source: {source_name}")
-                return df
-                
-        except Exception as e:
-            # If this source fails, try the next one
-            continue
-    
-    # If all sources fail
-    st.error("""
-    ⚠️ Could not fetch market data. This might be due to geographical restrictions.
-    
-    **Try:**
-    - Refresh the page
-    - Try again in a few minutes
-    - Contact admin if issue persists
-    """)
-    return None
-    
     def calculate_indicators(self, df):
         df['ema_9'] = ta.trend.ema_indicator(df['close'], window=9)
         df['ema_21'] = ta.trend.ema_indicator(df['close'], window=21)
