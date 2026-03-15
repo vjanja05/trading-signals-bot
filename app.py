@@ -217,9 +217,9 @@ class TradingSignalBot:
     """Trading signal bot with multiple data source fallbacks"""
     
      def __init__(self):
-         self.data_sources = []
-         self.current_source = 0
-         self._init_data_sources()
+        self.data_sources = []
+        self.current_source = 0
+        self._init_data_sources()
     
     def _init_data_sources(self):
         """Initialize multiple data source options"""
