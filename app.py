@@ -216,29 +216,47 @@ if 'password_manager' not in st.session_state:
 class TradingSignalBot:
     """Trading signal bot"""
     
-    def __init__(self):
-        self.exchange = ccxt.binance({
-            'enableRateLimit': True,
-            'options': {
-               'defaultType': 'future',
-               'urls': {
-                    'api': {
-                         'public': 'https://data-api.binance.vision/api/v3'  # Use public data endpoint
-                      }
-                 }
-            }
-        })
+def __init__(self):
+    # List of alternative Binance hosts that might work
+    self.hosts = [
+        'https://data-api.binance.vision',
+        'https://api1.binance.com',
+        'https://api2.binance.com',
+        'https://api3.binance.com',
+        'https://api.binance.com'
+    ]
+    self.current_host_index = 0
+    self._init_exchange()
     
-    def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
+def _init_exchange(self):
+    """Initialize exchange with current host"""
+    self.exchange = ccxt.binance({
+        'enableRateLimit': True,
+        'options': {'defaultType': 'future'},
+        'urls': {
+            'api': {
+                'public': f'{self.hosts[self.current_host_index]}/api/v3'
+            }
+        }
+    })
+
+def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
+    """Fetch with fallback to different hosts"""
+    for attempt in range(len(self.hosts)):
         try:
+            self._init_exchange()
             ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
             df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
             df.set_index('timestamp', inplace=True)
             return df
         except Exception as e:
-            st.error(f"Error fetching data: {e}")
-            return None
+            if "451" in str(e) and attempt < len(self.hosts) - 1:
+                self.current_host_index = (self.current_host_index + 1) % len(self.hosts)
+                continue
+            else:
+                st.error(f"Error fetching data from all hosts: {e}")
+                return None
     
     def calculate_indicators(self, df):
         df['ema_9'] = ta.trend.ema_indicator(df['close'], window=9)
