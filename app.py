@@ -48,7 +48,7 @@ def send_telegram_photo(photo_path, caption=""):
         return False, f"Error sending to Telegram: {str(e)}"
 
 # ===== PAYMENT CONFIGURATION =====
-YOUR_WALLET = os.getenv("YOUR_WALLET", "0x71C7656EC7ab88b098defB751B7401B5f6d8976F")  # Your BEP20 wallet
+YOUR_WALLET = os.getenv("YOUR_WALLET", "0x87ea9fc331bbe75fdae07f291046920b878e1367")  # Your BEP20 wallet
 ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 2592000))  # 30 days in seconds
 ACCESS_PRICE_USDT = 25  # $25 USDT
 
@@ -219,7 +219,14 @@ class TradingSignalBot:
     def __init__(self):
         self.exchange = ccxt.binance({
             'enableRateLimit': True,
-            'options': {'defaultType': 'future'}
+            'options': {
+               'defaultType': 'future',
+               'urls': {
+                    'api': {
+                         'public': 'https://data-api.binance.vision/api/v3'  # Use public data endpoint
+                      }
+                 }
+            }
         })
     
     def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
