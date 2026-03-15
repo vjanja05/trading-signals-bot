@@ -216,7 +216,7 @@ if 'password_manager' not in st.session_state:
 class TradingSignalBot:
     """Trading signal bot with multiple data source fallbacks"""
     
-     def __init__(self):
+    def __init__(self):
         self.data_sources = []
         self.current_source = 0
         self._init_data_sources()
