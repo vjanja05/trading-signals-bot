@@ -216,17 +216,17 @@ if 'password_manager' not in st.session_state:
 class TradingSignalBot:
     """Trading signal bot"""
     
-    def __init__(self):
-        # List of alternative Binance hosts that might work
-        self.hosts = [
-            'https://data-api.binance.vision',
-            'https://api1.binance.com',
-            'https://api2.binance.com',
-            'https://api3.binance.com',
-            'https://api.binance.com'
-          ]
-      self.current_host_index = 0
-      self._init_exchange()
+def __init__(self):
+    # List of alternative Binance hosts that might work
+    self.hosts = [
+        'https://data-api.binance.vision',
+        'https://api1.binance.com',
+        'https://api2.binance.com',
+        'https://api3.binance.com',
+        'https://api.binance.com'
+    ]
+    self.current_host_index = 0
+    self._init_exchange()
     
     def _init_exchange(self):
       """Initialize exchange with current host"""
