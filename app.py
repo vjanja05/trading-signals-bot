@@ -221,91 +221,61 @@ class TradingSignalBot:
         self.current_source = 0
         self._init_data_sources()
     
-    def _init_data_sources(self):
-        """Initialize multiple data source options with correct configurations"""
-        
-        # Option 1: Binance public data (using ccxt with custom URL)
-        try:
-            binance_public = ccxt.binance({
-                'enableRateLimit': True,
-                'options': {
-                    'defaultType': 'spot',  # Changed from 'future' to 'spot' for public data
-                },
-                'urls': {
-                    'api': {
-                        'public': 'https://data-api.binance.vision/api/v3',
-                        'private': 'https://data-api.binance.vision/api/v3',
-                    }
-                }
-            })
-            # Test the connection
-            binance_public.load_markets()
-            self.data_sources.append(('binance_public', binance_public))
-            print("✅ Binance public loaded")
-        except Exception as e:
-            print(f"Binance public failed: {e}")
-        
-        # Option 2: Regular binance (might work in some regions)
-        try:
-            binance_reg = ccxt.binance({
-                'enableRateLimit': True,
-                'options': {'defaultType': 'spot'}
-            })
-            binance_reg.load_markets()
-            self.data_sources.append(('binance', binance_reg))
-            print("✅ Binance regular loaded")
-        except:
-            pass
-        
-        # Option 3: Bybit (good alternative, works globally)
-        try:
-            bybit = ccxt.bybit({
-                'enableRateLimit': True,
-                'options': {
-                    'defaultType': 'spot',  # Using spot for public data
-                }
-            })
-            bybit.load_markets()
-            self.data_sources.append(('bybit', bybit))
-            print("✅ Bybit loaded")
-        except Exception as e:
-            print(f"Bybit failed: {e}")
-        
-        # Option 4: Kraken (reliable)
-        try:
-            kraken = ccxt.kraken({
-                'enableRateLimit': True,
-            })
-            kraken.load_markets()
-            self.data_sources.append(('kraken', kraken))
-            print("✅ Kraken loaded")
-        except:
-            pass
-        
-        # Option 5: OKX
-        try:
-            okx = ccxt.okx({
-                'enableRateLimit': True,
-                'options': {'defaultType': 'spot'}
-            })
-            okx.load_markets()
-            self.data_sources.append(('okx', okx))
-            print("✅ OKX loaded")
-        except:
-            pass
-        
-        # Option 6: KuCoin (additional backup)
-        try:
-            kucoin = ccxt.kucoin({
-                'enableRateLimit': True,
-            })
-            kucoin.load_markets()
-            self.data_sources.append(('kucoin', kucoin))
-            print("✅ KuCoin loaded")
-        except:
-            pass
-        
-        print(f"Total data sources loaded: {len(self.data_sources)}")
+def _init_data_sources(self):
+    """Initialize multiple data source options, skipping problematic exchanges"""
+    self.data_sources = []
+    
+    # Option 1: Bybit (usually works globally)
+    try:
+        bybit = ccxt.bybit({
+            'enableRateLimit': True,
+            'options': {'defaultType': 'spot'}
+        })
+        # Test the connection by loading markets
+        bybit.load_markets()
+        self.data_sources.append(('bybit', bybit))
+        print("✅ Bybit connected successfully")
+    except Exception as e:
+        print(f"❌ Bybit failed: {e}")
+    
+    # Option 2: Kraken (very reliable globally)
+    try:
+        kraken = ccxt.kraken({
+            'enableRateLimit': True,
+        })
+        kraken.load_markets()
+        self.data_sources.append(('kraken', kraken))
+        print("✅ Kraken connected successfully")
+    except Exception as e:
+        print(f"❌ Kraken failed: {e}")
+    
+    # Option 3: KuCoin
+    try:
+        kucoin = ccxt.kucoin({
+            'enableRateLimit': True,
+        })
+        kucoin.load_markets()
+        self.data_sources.append(('kucoin', kucoin))
+        print("✅ KuCoin connected successfully")
+    except Exception as e:
+        print(f"❌ KuCoin failed: {e}")
+    
+    # Option 4: OKX
+    try:
+        okx = ccxt.okx({
+            'enableRateLimit': True,
+            'options': {'defaultType': 'spot'}
+        })
+        okx.load_markets()
+        self.data_sources.append(('okx', okx))
+        print("✅ OKX connected successfully")
+    except Exception as e:
+        print(f"❌ OKX failed: {e}")
+    
+    print(f"✅ Total working sources: {len(self.data_sources)}")
+    
+    if len(self.data_sources) == 0:
+        st.error("⚠️ No data sources available. The app cannot fetch market data.")
     
     def _format_symbol(self, symbol, source_name):
         """Format symbol based on exchange requirements"""
@@ -559,9 +529,30 @@ class TradingSignalBot:
 # Initialize bot
 @st.cache_resource
 def get_bot():
-    return TradingSignalBot()
+    bot = TradingSignalBot()
+    # Store available sources in session state for debugging
+    st.session_state.available_sources = [name for name, _ in bot.data_sources]
+    return bot
 
 bot = get_bot()
+
+# Add this debug expander in your sidebar or main area
+with st.expander("🔧 Debug Info"):
+    st.write("**Available Data Sources:**")
+    if st.session_state.get('available_sources'):
+        for source in st.session_state.available_sources:
+            st.write(f"✅ {source}")
+    else:
+        st.write("❌ No sources available")
+    
+    if st.button("Test Connection"):
+        with st.spinner("Testing..."):
+            for name, exchange in bot.data_sources:
+                try:
+                    ticker = exchange.fetch_ticker('BTC/USDT')
+                    st.success(f"✅ {name}: BTC = ${ticker['last']}")
+                except Exception as e:
+                    st.error(f"❌ {name}: {str(e)[:100]}")
 
 # Create a directory for payment proofs if it doesn't exist
 PAYMENT_PROOFS_DIR = "payment_proofs"
