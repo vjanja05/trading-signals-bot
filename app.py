@@ -222,13 +222,15 @@ class TradingSignalBot:
         self._init_data_sources()
     
     def _init_data_sources(self):
-        """Initialize multiple data source options"""
+        """Initialize multiple data source options with correct configurations"""
         
         # Option 1: Binance public data (using ccxt with custom URL)
         try:
             binance_public = ccxt.binance({
                 'enableRateLimit': True,
-                'options': {'defaultType': 'future'},
+                'options': {
+                    'defaultType': 'spot',  # Changed from 'future' to 'spot' for public data
+                },
                 'urls': {
                     'api': {
                         'public': 'https://data-api.binance.vision/api/v3',
@@ -236,17 +238,22 @@ class TradingSignalBot:
                     }
                 }
             })
+            # Test the connection
+            binance_public.load_markets()
             self.data_sources.append(('binance_public', binance_public))
-        except:
-            pass
+            print("✅ Binance public loaded")
+        except Exception as e:
+            print(f"Binance public failed: {e}")
         
         # Option 2: Regular binance (might work in some regions)
         try:
             binance_reg = ccxt.binance({
                 'enableRateLimit': True,
-                'options': {'defaultType': 'future'}
+                'options': {'defaultType': 'spot'}
             })
+            binance_reg.load_markets()
             self.data_sources.append(('binance', binance_reg))
+            print("✅ Binance regular loaded")
         except:
             pass
         
@@ -254,191 +261,300 @@ class TradingSignalBot:
         try:
             bybit = ccxt.bybit({
                 'enableRateLimit': True,
-                'options': {'defaultType': 'future'}
+                'options': {
+                    'defaultType': 'spot',  # Using spot for public data
+                }
             })
+            bybit.load_markets()
             self.data_sources.append(('bybit', bybit))
-        except:
-            pass
+            print("✅ Bybit loaded")
+        except Exception as e:
+            print(f"Bybit failed: {e}")
         
-        # Option 4: Kraken Futures (another global option)
+        # Option 4: Kraken (reliable)
         try:
-            kraken = ccxt.krakenfutures({
+            kraken = ccxt.kraken({
                 'enableRateLimit': True,
             })
+            kraken.load_markets()
             self.data_sources.append(('kraken', kraken))
+            print("✅ Kraken loaded")
         except:
             pass
         
-        # Option 5: OKX (works in most regions)
+        # Option 5: OKX
         try:
             okx = ccxt.okx({
                 'enableRateLimit': True,
-                'options': {'defaultType': 'future'}
+                'options': {'defaultType': 'spot'}
             })
+            okx.load_markets()
             self.data_sources.append(('okx', okx))
+            print("✅ OKX loaded")
         except:
             pass
+        
+        # Option 6: KuCoin (additional backup)
+        try:
+            kucoin = ccxt.kucoin({
+                'enableRateLimit': True,
+            })
+            kucoin.load_markets()
+            self.data_sources.append(('kucoin', kucoin))
+            print("✅ KuCoin loaded")
+        except:
+            pass
+        
+        print(f"Total data sources loaded: {len(self.data_sources)}")
+    
+    def _format_symbol(self, symbol, source_name):
+        """Format symbol based on exchange requirements"""
+        base, quote = symbol.split('/')
+        
+        # Different exchanges use different formats
+        if source_name in ['bybit']:
+            if quote == 'USDT':
+                return f"{base}{quote}"  # BTCUSDT
+            return symbol
+        elif source_name in ['kraken']:
+            # Kraken uses format like XBT/USD
+            if base == 'BTC':
+                base = 'XBT'
+            return f"{base}/{quote}"
+        elif source_name in ['kucoin']:
+            return f"{base}-{quote}"  # BTC-USDT
+        elif source_name in ['okx']:
+            return f"{base}-{quote}"  # BTC-USDT
+        else:
+            # Binance and others work with standard format
+            return symbol
     
     def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
         """Try multiple data sources until one works"""
         
+        if not self.data_sources:
+            st.error("No data sources available. Please check your internet connection.")
+            return None
+        
+        # Map timeframes for different exchanges
+        timeframe_map = {
+            '1m': '1m',
+            '5m': '5m',
+            '15m': '15m',
+            '30m': '30m',
+            '1h': '1h',
+            '4h': '4h',
+            '1d': '1d',
+            '1w': '1w'
+        }
+        
         # Try each data source in order
         for source_name, exchange in self.data_sources:
             try:
+                # Format symbol for this exchange
+                formatted_symbol = self._format_symbol(symbol, source_name)
+                
+                # Get correct timeframe format
+                tf = timeframe_map.get(timeframe, timeframe)
+                
                 # Try to fetch OHLCV data
-                ohlcv = exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+                ohlcv = exchange.fetch_ohlcv(formatted_symbol, tf, limit=limit)
                 
                 if ohlcv and len(ohlcv) > 0:
                     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
                     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
                     df.set_index('timestamp', inplace=True)
                     
-                    # Log success (optional)
-                    print(f"Successfully fetched data from {source_name}")
+                    # Store which source worked
+                    st.session_state['data_source'] = source_name
+                    
+                    # Show success indicator (optional)
+                    st.caption(f"📡 Data from: {source_name}")
+                    
                     return df
                     
             except Exception as e:
-                # If this source fails, try the next one
-                print(f"Failed to fetch from {source_name}: {str(e)[:50]}...")
+                # If this source fails, try the next one silently
                 continue
         
-        # If all sources fail
-        st.error("Could not fetch market data from any provider. Please try again later.")
+        # If all sources fail, show helpful error
+        st.error("""
+        ⚠️ **Could not fetch market data**
+        
+        This might be due to:
+        - Geographical restrictions
+        - Exchange API limits
+        - Temporary network issues
+        
+        **Try:**
+        1. 🔄 Click 'Generate Signals' again
+        2. ⏱️ Wait a few minutes and retry
+        3. 📱 Contact admin if issue persists
+        """)
         return None
     
     def calculate_indicators(self, df):
-        df['ema_9'] = ta.trend.ema_indicator(df['close'], window=9)
-        df['ema_21'] = ta.trend.ema_indicator(df['close'], window=21)
-        df['ema_50'] = ta.trend.ema_indicator(df['close'], window=50)
-        df['rsi'] = ta.momentum.rsi(df['close'], window=14)
+        """Calculate technical indicators"""
+        if df is None or len(df) < 20:
+            return df
         
-        macd = ta.trend.MACD(df['close'])
-        df['macd'] = macd.macd()
-        df['macd_signal'] = macd.macd_signal()
+        try:
+            # Trend indicators
+            df['ema_9'] = ta.trend.ema_indicator(df['close'], window=9)
+            df['ema_21'] = ta.trend.ema_indicator(df['close'], window=21)
+            df['ema_50'] = ta.trend.ema_indicator(df['close'], window=50)
+            
+            # Momentum indicators
+            df['rsi'] = ta.momentum.rsi(df['close'], window=14)
+            
+            # MACD
+            macd = ta.trend.MACD(df['close'])
+            df['macd'] = macd.macd()
+            df['macd_signal'] = macd.macd_signal()
+            df['macd_diff'] = macd.macd_diff()
+            
+            # Bollinger Bands
+            bb = ta.volatility.BollingerBands(df['close'], window=20, window_dev=2)
+            df['bb_upper'] = bb.bollinger_hband()
+            df['bb_middle'] = bb.bollinger_mavg()
+            df['bb_lower'] = bb.bollinger_lband()
+            
+            # Volume
+            df['volume_sma'] = df['volume'].rolling(window=20).mean()
+            
+        except Exception as e:
+            st.warning(f"Error calculating indicators: {e}")
         
-        bb = ta.volatility.BollingerBands(df['close'], window=20, window_dev=2)
-        df['bb_upper'] = bb.bollinger_hband()
-        df['bb_middle'] = bb.bollinger_mavg()
-        df['bb_lower'] = bb.bollinger_lband()
-        
-        df['volume_sma'] = df['volume'].rolling(window=20).mean()
         return df
     
     def generate_signal(self, df):
+        """Generate trading signal based on multiple factors"""
         if df is None or len(df) < 50:
             return None
         
-        latest = df.iloc[-1]
-        prev = df.iloc[-2]
-        
-        bullish_score = 0
-        bearish_score = 0
-        reasons = []
-        
-        # EMA trend
-        if latest['ema_9'] > latest['ema_21']:
-            bullish_score += 3
-            reasons.append("📈 Bullish EMA trend")
-        else:
-            bearish_score += 3
-            reasons.append("📉 Bearish EMA trend")
-        
-        # RSI
-        if latest['rsi'] < 30:
-            bullish_score += 4
-            reasons.append(f"💪 Oversold RSI: {latest['rsi']:.1f}")
-        elif latest['rsi'] > 70:
-            bearish_score += 4
-            reasons.append(f"⚠️ Overbought RSI: {latest['rsi']:.1f}")
-        elif latest['rsi'] > 50:
-            bullish_score += 1
-            reasons.append(f"📊 Bullish RSI: {latest['rsi']:.1f}")
-        else:
-            bearish_score += 1
-            reasons.append(f"📊 Bearish RSI: {latest['rsi']:.1f}")
-        
-        # MACD
-        if latest['macd'] > latest['macd_signal']:
-            bullish_score += 2
-            reasons.append("🟢 MACD bullish")
-        else:
-            bearish_score += 2
-            reasons.append("🔴 MACD bearish")
-        
-        # Bollinger Bands
-        if latest['close'] < latest['bb_lower']:
-            bullish_score += 3
-            reasons.append("📉 Price below lower BB")
-        elif latest['close'] > latest['bb_upper']:
-            bearish_score += 3
-            reasons.append("📈 Price above upper BB")
-        
-        # Volume
-        volume_sma = df['volume'].rolling(window=20).mean().iloc[-1]
-        if latest['volume'] > volume_sma * 1.5:
-            reasons.append("📊 High volume confirmation")
-            if bullish_score > bearish_score:
-                bullish_score += 2
-            else:
-                bearish_score += 2
-        
-        # Determine signal
-        total_score = bullish_score - bearish_score
-        
-        if total_score >= 3:
-            signal = "LONG"
-            confidence = min(50 + (total_score * 5), 95)
-        elif total_score <= -3:
-            signal = "SHORT"
-            confidence = min(50 + (abs(total_score) * 5), 95)
-        else:
-            if latest['rsi'] > 50:
+        try:
+            latest = df.iloc[-1]
+            prev = df.iloc[-2]
+            
+            bullish_score = 0
+            bearish_score = 0
+            reasons = []
+            
+            # EMA trend (check if values exist)
+            if 'ema_9' in df.columns and 'ema_21' in df.columns:
+                if not pd.isna(latest['ema_9']) and not pd.isna(latest['ema_21']):
+                    if latest['ema_9'] > latest['ema_21']:
+                        bullish_score += 3
+                        reasons.append("📈 Bullish EMA trend")
+                    else:
+                        bearish_score += 3
+                        reasons.append("📉 Bearish EMA trend")
+            
+            # RSI
+            if 'rsi' in df.columns and not pd.isna(latest['rsi']):
+                if latest['rsi'] < 30:
+                    bullish_score += 4
+                    reasons.append(f"💪 Oversold RSI: {latest['rsi']:.1f}")
+                elif latest['rsi'] > 70:
+                    bearish_score += 4
+                    reasons.append(f"⚠️ Overbought RSI: {latest['rsi']:.1f}")
+                elif latest['rsi'] > 50:
+                    bullish_score += 1
+                    reasons.append(f"📊 Bullish RSI: {latest['rsi']:.1f}")
+                else:
+                    bearish_score += 1
+                    reasons.append(f"📊 Bearish RSI: {latest['rsi']:.1f}")
+            
+            # MACD
+            if 'macd' in df.columns and 'macd_signal' in df.columns:
+                if not pd.isna(latest['macd']) and not pd.isna(latest['macd_signal']):
+                    if latest['macd'] > latest['macd_signal']:
+                        bullish_score += 2
+                        reasons.append("🟢 MACD bullish")
+                    else:
+                        bearish_score += 2
+                        reasons.append("🔴 MACD bearish")
+            
+            # Bollinger Bands
+            if all(x in df.columns for x in ['bb_lower', 'bb_upper']):
+                if not pd.isna(latest['bb_lower']) and not pd.isna(latest['bb_upper']):
+                    if latest['close'] < latest['bb_lower']:
+                        bullish_score += 3
+                        reasons.append("📉 Price below lower BB")
+                    elif latest['close'] > latest['bb_upper']:
+                        bearish_score += 3
+                        reasons.append("📈 Price above upper BB")
+            
+            # Volume
+            if 'volume_sma' in df.columns and not pd.isna(latest['volume_sma']):
+                if latest['volume'] > latest['volume_sma'] * 1.5:
+                    reasons.append("📊 High volume confirmation")
+                    if bullish_score > bearish_score:
+                        bullish_score += 2
+                    else:
+                        bearish_score += 2
+            
+            # Determine signal
+            total_score = bullish_score - bearish_score
+            
+            if total_score >= 3:
                 signal = "LONG"
-                confidence = 55
-            else:
+                confidence = min(50 + (total_score * 5), 95)
+            elif total_score <= -3:
                 signal = "SHORT"
-                confidence = 55
-        
-        # Calculate TP/SL
-        current_price = latest['close']
-        volatility = df['close'].pct_change().std() * 100
-        
-        if volatility > 3:
-            sl_percent = 0.035
-            tp_percent = 0.07
-        elif volatility < 1.5:
-            sl_percent = 0.015
-            tp_percent = 0.03
-        else:
-            sl_percent = 0.025
-            tp_percent = 0.05
-        
-        if signal == "LONG":
-            stop_loss = current_price * (1 - sl_percent)
-            take_profit = current_price * (1 + tp_percent)
-        else:
-            stop_loss = current_price * (1 + sl_percent)
-            take_profit = current_price * (1 - tp_percent)
-        
-        risk = abs(current_price - stop_loss)
-        reward = abs(take_profit - current_price)
-        rr_ratio = reward / risk if risk > 0 else 2.0
-        
-        reasons.append(f"📊 Score: Bullish {bullish_score} - Bearish {bearish_score} = {total_score}")
-        
-        return {
-            'signal': signal,
-            'confidence': int(confidence),
-            'current_price': current_price,
-            'stop_loss': stop_loss,
-            'take_profit': take_profit,
-            'risk_reward_ratio': rr_ratio,
-            'reasons': reasons,
-            'rsi': latest['rsi'],
-            'volume': latest['volume'],
-            'timestamp': datetime.now(),
-            'volatility': f"{volatility:.2f}%"
-        }
+                confidence = min(50 + (abs(total_score) * 5), 95)
+            else:
+                if latest.get('rsi', 50) > 50:
+                    signal = "LONG"
+                    confidence = 55
+                else:
+                    signal = "SHORT"
+                    confidence = 55
+            
+            # Calculate TP/SL
+            current_price = latest['close']
+            volatility = df['close'].pct_change().std() * 100
+            
+            if volatility > 3:
+                sl_percent = 0.035
+                tp_percent = 0.07
+            elif volatility < 1.5:
+                sl_percent = 0.015
+                tp_percent = 0.03
+            else:
+                sl_percent = 0.025
+                tp_percent = 0.05
+            
+            if signal == "LONG":
+                stop_loss = current_price * (1 - sl_percent)
+                take_profit = current_price * (1 + tp_percent)
+            else:
+                stop_loss = current_price * (1 + sl_percent)
+                take_profit = current_price * (1 - tp_percent)
+            
+            risk = abs(current_price - stop_loss)
+            reward = abs(take_profit - current_price)
+            rr_ratio = reward / risk if risk > 0 else 2.0
+            
+            reasons.append(f"📊 Score: Bullish {bullish_score} - Bearish {bearish_score} = {total_score}")
+            
+            return {
+                'signal': signal,
+                'confidence': int(confidence),
+                'current_price': current_price,
+                'stop_loss': stop_loss,
+                'take_profit': take_profit,
+                'risk_reward_ratio': rr_ratio,
+                'reasons': reasons,
+                'rsi': latest.get('rsi', 50),
+                'volume': latest['volume'],
+                'timestamp': datetime.now(),
+                'volatility': f"{volatility:.2f}%"
+            }
+            
+        except Exception as e:
+            st.error(f"Error generating signal: {e}")
+            return None
 
 # Initialize bot
 @st.cache_resource
