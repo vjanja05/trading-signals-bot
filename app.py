@@ -225,8 +225,8 @@ class TradingSignalBot:
             'https://api3.binance.com',
             'https://api.binance.com'
           ]
-            self.current_host_index = 0
-            self._init_exchange()
+      self.current_host_index = 0
+      self._init_exchange()
     
     def _init_exchange(self):
       """Initialize exchange with current host"""
