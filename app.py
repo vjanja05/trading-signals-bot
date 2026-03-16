@@ -786,142 +786,356 @@ with st.expander("🔧 Debug Info"):
                 except Exception as e:
                     st.error(f"❌ {name}: {str(e)[:100]}")
 
-# ===== MAIN CONTENT (Only for paid users) =====
-with col_right:
-    if st.session_state.access_granted:
-        st.title("AI Trading Signals")
+# ===== PASSWORD-BASED ACCESS SYSTEM =====
+# Check access expiry
+if st.session_state.access_expiry:
+    if datetime.now() > st.session_state.access_expiry:
+        st.session_state.access_granted = False
+        st.session_state.access_expiry = None
+        st.session_state.payment_verified = False
+
+# Create two columns only if access NOT granted
+if not st.session_state.access_granted:
+    col_left, col_right = st.columns([1, 2])
+else:
+    # If access granted, use full width for content
+    col_left, col_right = None, st.container()
+
+# LEFT COLUMN - Payment Stuff (Only shown when NOT granted)
+if not st.session_state.access_granted and col_left:
+    with col_left:
+        st.image("https://cryptologos.cc/logos/binance-coin-bnb-logo.png", width=50)
+        st.markdown("### 🔐 BEP20 USDT Access")
         
-        # Trading controls
-        col1, col2, col3 = st.columns(3)
+        # Show current status
+        if st.session_state.access_granted and st.session_state.access_expiry:
+            days_left = (st.session_state.access_expiry - datetime.now()).days
+            hours_left = ((st.session_state.access_expiry - datetime.now()).seconds // 3600)
+            
+            st.markdown(f"""
+            <div style="background-color: #d4edda; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                <span class="access-badge">✅ ACTIVE</span>
+                <p style="margin-top: 10px; margin-bottom: 0;">
+                <strong>Expires:</strong> {st.session_state.access_expiry.strftime('%Y-%m-%d %H:%M')}<br>
+                <strong>Time left:</strong> {days_left} days {hours_left} hours
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style="background-color: #f8d7da; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                <span style="background-color: #dc3545; color: white; padding: 5px 15px; border-radius: 20px;">🔒 LOCKED</span>
+                <p style="margin-top: 10px; margin-bottom: 0;">Complete payment below for 30 days access</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # Payment Section
+        st.markdown("### 💰 Purchase Access - 25 USDT")
+        
+        st.markdown(f"""
+        <div class="payment-box">
+            <h2 style="margin: 0;">25 USDT</h2>
+            <p style="margin: 5px 0;">BEP20 (Binance Smart Chain)</p>
+            <p style="margin: 0;"><strong>30 Days Premium Access</strong></p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Copy section
+        st.markdown("### 📋 Your Payment Address")
+        st.code(YOUR_WALLET, language="text")
+        
+        st.markdown("""
+        **📋 Copy Instructions:**
+        1. Click inside the code box above
+        2. Press **Ctrl+A** (Windows) or **Cmd+A** (Mac)
+        3. Press **Ctrl+C** (Windows) or **Cmd+C** (Mac)
+        4. Paste into Binance app
+        """)
+        
+        st.text_input(
+            "✏️ Backup copy field:", 
+            value=YOUR_WALLET, 
+            key="backup_copy",
+            disabled=True
+        )
+        
+        st.error("⚠️ Send exactly 25 USDT on BEP20 network")
+        st.markdown("---")
+        
+        # QR Code
+        with st.expander("📱 Show QR Code"):
+            try:
+                st.image(
+                    "qr_code.jpeg",
+                    caption="Scan with Binance app",
+                    width=200
+                )
+            except:
+                st.warning("QR code image not found")
+        
+        st.markdown("---")
+        
+        # Password Access
+        st.markdown("### 🔑 Enter Access Password")
+        
+        access_password = st.text_input(
+            "Password:", 
+            type="password",
+            placeholder="Enter your 30-day access password",
+            key="access_password_input"
+        )
+        
+        if st.button("🔓 Unlock Access", use_container_width=True, type="primary"):
+            if access_password:
+                admin_password = "password.me"
+                
+                if access_password == admin_password:
+                    st.session_state.access_granted = True
+                    st.session_state.access_expiry = datetime.now() + timedelta(seconds=ACCESS_DURATION)
+                    st.success("✅ Admin access granted!")
+                    st.balloons()
+                    st.rerun()
+                else:
+                    valid, message = st.session_state.password_manager.verify_password(access_password)
+                    if valid:
+                        st.session_state.access_granted = True
+                        st.session_state.access_expiry = datetime.now() + timedelta(seconds=ACCESS_DURATION)
+                        st.success("✅ Access granted! Welcome to Premium!")
+                        st.balloons()
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {message}")
+            else:
+                st.warning("Please enter a password")
+        
+        st.markdown("---")
+
+# RIGHT COLUMN - Content (Payment stuff hidden after login)
+content_container = col_right if not st.session_state.access_granted else st.container()
+
+with content_container:
+    if st.session_state.access_granted:
+        # PAID USERS - Show signals (FULL WIDTH, NO PAYMENT STUFF)
+        st.title("🤖 AI Trading Signals - Premium Access")
+        
+        # SINGLE COIN SEARCH - Simplified
+        st.markdown("### 🔍 Search Single Coin")
+        
+        # Coin selection dropdown (single selection)
+        available_coins = [
+            "BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", 
+            "ADA/USDT", "XRP/USDT", "DOGE/USDT", "DOT/USDT",
+            "LINK/USDT", "AVAX/USDT", "MATIC/USDT"
+        ]
+        
+        col1, col2, col3 = st.columns([2, 1, 1])
         
         with col1:
-            available_coins = [
-                "BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", 
-                "ADA/USDT", "XRP/USDT", "DOGE/USDT", "DOT/USDT",
-                "LINK/USDT", "AVAX/USDT", "MATIC/USDT"
-            ]
-            selected_coins = st.multiselect(
-                "📊 Select Coins",
+            selected_coin = st.selectbox(
+                "Select Coin",
                 available_coins,
-                default=["BTC/USDT", "ETH/USDT"],
-                key="coin_selector"
+                index=0,
+                key="coin_selector_single"
             )
-            st.session_state.selected_coins = selected_coins
         
         with col2:
             timeframe = st.selectbox(
-                "⏱️ Timeframe",
+                "Timeframe",
                 ["15m", "1h", "4h", "1d"],
                 index=1,
-                key="timeframe_selector"
+                key="timeframe_selector_single"
             )
         
         with col3:
             st.write("")  # Spacing
             st.write("")  # Spacing
-            auto_refresh = st.checkbox("🔄 Auto-refresh (30s)", key="auto_refresh_checkbox")
-            scan_button = st.button("🚀 Generate Signals", use_container_width=True, type="primary", key="scan_button")
+            search_button = st.button("🔍 Search", use_container_width=True, type="primary", key="search_button")
         
-        # Generate signals
-        if scan_button and selected_coins:
-            with st.spinner(f"🔍 Analyzing {len(selected_coins)} coins..."):
-                all_signals = []
-                progress_bar = st.progress(0)
-                
-                for i, coin in enumerate(selected_coins):
-                    progress_bar.progress((i + 1) / len(selected_coins))
-                    df = bot.fetch_data(coin, timeframe)
-                    if df is not None:
-                        df = bot.calculate_indicators(df)
-                        signal = bot.generate_signal(df)
-                        if signal:
-                            signal['coin'] = coin
-                            all_signals.append(signal)
-                
-                all_signals.sort(key=lambda x: x['confidence'], reverse=True)
-                st.session_state.multi_signals = all_signals
-                st.session_state.last_update = datetime.now()
+        # Auto-refresh option
+        auto_refresh = st.checkbox("🔄 Auto-refresh (30s)", key="auto_refresh_single")
         
-# Display signals
-if st.session_state.multi_signals:
-    # Summary metrics
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("📊 Coins Scanned", len(st.session_state.multi_signals))
-    with col2:
-        bullish = sum(1 for s in st.session_state.multi_signals if s['signal'] == "LONG")
-        st.metric("🟢 Bullish", bullish)
-    with col3:
-        bearish = sum(1 for s in st.session_state.multi_signals if s['signal'] == "SHORT")
-        st.metric("🔴 Bearish", bearish)
-    with col4:
-        best_conf = max([s['confidence'] for s in st.session_state.multi_signals])
-        st.metric("⭐ Best Confidence", f"{best_conf}%")
-    
-    st.markdown("---")
-    
-    # Top signals table
-    signal_data = []
-    for s in st.session_state.multi_signals[:10]:
-        # Handle None values safely
-        stop_loss_str = f"${s['stop_loss']:,.2f}" if s.get('stop_loss') is not None else "N/A"
-        take_profit_str = f"${s['take_profit']:,.2f}" if s.get('take_profit') is not None else "N/A"
-        rr_str = f"1:{s['risk_reward_ratio']:.2f}" if s.get('risk_reward_ratio') is not None else "N/A"
+        # Generate signal for single coin
+        if search_button:
+            with st.spinner(f"🔍 Analyzing {selected_coin}..."):
+                df = bot.fetch_data(selected_coin, timeframe)
+                if df is not None:
+                    df = bot.calculate_indicators(df)
+                    signal = bot.generate_signal(df)
+                    if signal:
+                        signal['coin'] = selected_coin
+                        st.session_state.multi_signals = [signal]  # Replace with single signal
+                        st.session_state.last_update = datetime.now()
         
-        signal_data.append({
-            "Coin": s['coin'],
-            "Signal": s['signal'],
-            "Confidence": f"{s['confidence']}%",
-            "Entry": f"${s['current_price']:,.2f}",
-            "Stop Loss": stop_loss_str,
-            "Take Profit": take_profit_str,
-            "R:R": rr_str
-        })
-    
-    signal_df = pd.DataFrame(signal_data)
-    
-    # Color code signals
-    def color_signal(val):
-        if val == "LONG":
-            return 'background-color: #d4edda; color: #155724'
-        elif val == "SHORT":
-            return 'background-color: #f8d7da; color: #721c24'
-        return ''
-    
-    styled_df = signal_df.style.applymap(color_signal, subset=['Signal'])
-    st.dataframe(styled_df, use_container_width=True, height=400)
-    
-    # Best signal details
-    if st.session_state.multi_signals:
-        best = st.session_state.multi_signals[0]
-        st.markdown("---")
-        st.subheader(f"🏆 Best Signal: {best['coin']}")
-        
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.info(f"**Signal:** {best['signal']}")
-            st.info(f"**Confidence:** {best['confidence']}%")
-        with col2:
-            st.info(f"**Entry:** ${best['current_price']:,.2f}")
-            stop_loss_display = f"${best['stop_loss']:,.2f}" if best.get('stop_loss') else "N/A"
-            st.info(f"**Stop Loss:** {stop_loss_display}")
-        with col3:
-            take_profit_display = f"${best['take_profit']:,.2f}" if best.get('take_profit') else "N/A"
-            st.info(f"**Take Profit:** {take_profit_display}")
-            rr_display = f"1:{best['risk_reward_ratio']:.2f}" if best.get('risk_reward_ratio') else "N/A"
-            st.info(f"**Risk/Reward:** {rr_display}")
-        
-        with st.expander("📊 Analysis Details"):
-            for reason in best['reasons']:
+        # Display single signal
+        if st.session_state.multi_signals:
+            signal = st.session_state.multi_signals[0]  # Get the single signal
+            
+            # Signal header
+            if signal['signal'] == "LONG":
+                st.markdown(f'<div class="signal-long">📈 {signal["coin"]} - LONG SIGNAL (Confidence: {signal["confidence"]}%)</div>', unsafe_allow_html=True)
+            elif signal['signal'] == "SHORT":
+                st.markdown(f'<div class="signal-short">📉 {signal["coin"]} - SHORT SIGNAL (Confidence: {signal["confidence"]}%)</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="signal-neutral">⏸️ {signal["coin"]} - NEUTRAL (Confidence: {signal["confidence"]}%)</div>', unsafe_allow_html=True)
+            
+            st.markdown("---")
+            
+            # Key metrics in columns
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Current Price", f"${signal['current_price']:,.2f}")
+            with col2:
+                st.metric("RSI (14)", f"{signal['rsi']:.1f}")
+            with col3:
+                st.metric("Confidence", f"{signal['confidence']}%")
+            with col4:
+                st.metric("Volatility", signal['volatility'])
+            
+            st.markdown("---")
+            
+            # Trading details in columns
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.subheader("📊 Entry")
+                st.write(f"**Price:** ${signal['current_price']:,.2f}")
+            
+            with col2:
+                st.subheader("🛑 Stop Loss")
+                if signal.get('stop_loss'):
+                    st.write(f"**Price:** ${signal['stop_loss']:,.2f}")
+                    if signal['signal'] == "LONG":
+                        distance = ((signal['current_price'] - signal['stop_loss']) / signal['current_price']) * 100
+                        st.write(f"**Distance:** {distance:.2f}% 🔴")
+                    elif signal['signal'] == "SHORT":
+                        distance = ((signal['stop_loss'] - signal['current_price']) / signal['current_price']) * 100
+                        st.write(f"**Distance:** {distance:.2f}% 🔴")
+                else:
+                    st.write("**Price:** N/A")
+            
+            with col3:
+                st.subheader("🎯 Take Profit")
+                if signal.get('take_profit'):
+                    st.write(f"**Price:** ${signal['take_profit']:,.2f}")
+                    if signal['signal'] == "LONG":
+                        distance = ((signal['take_profit'] - signal['current_price']) / signal['current_price']) * 100
+                        st.write(f"**Distance:** +{distance:.2f}% ✅")
+                    elif signal['signal'] == "SHORT":
+                        distance = ((signal['current_price'] - signal['take_profit']) / signal['current_price']) * 100
+                        st.write(f"**Distance:** +{distance:.2f}% ✅")
+                else:
+                    st.write("**Price:** N/A")
+            
+            st.markdown("---")
+            
+            # Risk/Reward
+            if signal.get('risk_reward_ratio'):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.subheader("📈 Risk/Reward")
+                    st.write(f"**Ratio:** 1:{signal['risk_reward_ratio']:.2f}")
+                    
+                    if signal['risk_reward_ratio'] >= 2:
+                        st.success("✅ Good risk/reward")
+                    elif signal['risk_reward_ratio'] >= 1.5:
+                        st.warning("⚠️ Acceptable risk/reward")
+                    else:
+                        st.error("❌ Poor risk/reward")
+            
+            # Analysis reasons
+            st.subheader("🔍 Analysis Reasons")
+            for reason in signal['reasons']:
                 st.write(f"• {reason}")
+            
+            st.markdown("---")
+            
+            # Price chart
+            st.subheader("📈 Price Chart")
+            
+            # Fetch data for chart
+            df = bot.fetch_data(signal['coin'], timeframe, limit=100)
+            if df is not None:
+                df = bot.calculate_indicators(df)
+                
+                fig = make_subplots(
+                    rows=3, cols=1,
+                    shared_xaxes=True,
+                    vertical_spacing=0.05,
+                    row_heights=[0.6, 0.2, 0.2]
+                )
+                
+                # Candlestick chart
+                fig.add_trace(
+                    go.Candlestick(
+                        x=df.index,
+                        open=df['open'],
+                        high=df['high'],
+                        low=df['low'],
+                        close=df['close'],
+                        name='Price'
+                    ),
+                    row=1, col=1
+                )
+                
+                # Add EMAs
+                fig.add_trace(
+                    go.Scatter(x=df.index, y=df['ema_9'], name='EMA 9', line=dict(color='blue', width=1)),
+                    row=1, col=1
+                )
+                fig.add_trace(
+                    go.Scatter(x=df.index, y=df['ema_21'], name='EMA 21', line=dict(color='orange', width=1)),
+                    row=1, col=1
+                )
+                
+                # Add Bollinger Bands
+                fig.add_trace(
+                    go.Scatter(x=df.index, y=df['bb_upper'], name='BB Upper', line=dict(color='gray', width=1, dash='dash')),
+                    row=1, col=1
+                )
+                fig.add_trace(
+                    go.Scatter(x=df.index, y=df['bb_lower'], name='BB Lower', line=dict(color='gray', width=1, dash='dash')),
+                    row=1, col=1
+                )
+                
+                # Volume bars
+                colors = ['red' if row['open'] > row['close'] else 'green' for index, row in df.iterrows()]
+                fig.add_trace(
+                    go.Bar(x=df.index, y=df['volume'], name='Volume', marker_color=colors),
+                    row=2, col=1
+                )
+                
+                # RSI
+                fig.add_trace(
+                    go.Scatter(x=df.index, y=df['rsi'], name='RSI', line=dict(color='purple')),
+                    row=3, col=1
+                )
+                fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
+                fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
+                
+                fig.update_layout(
+                    height=800,
+                    xaxis_rangeslider_visible=False,
+                    showlegend=True,
+                    template='plotly_dark'
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Last update time
+            st.caption(f"Last updated: {st.session_state.last_update.strftime('%Y-%m-%d %H:%M:%S')}")
+            
+            # Auto-refresh
+            if auto_refresh:
+                time.sleep(30)
+                st.rerun()
         
-        # Auto-refresh
-        if auto_refresh and st.session_state.multi_signals:
-            time.sleep(30)
-            st.rerun()
+        else:
+            st.info("👈 Select a coin and click 'Search' to generate signals")
     
     else:
-        # FREE USERS - Show preview
+        # FREE USERS - Show preview (with payment stuff on left)
         st.title("🤖 Premium Trading Signals")
         
         col1, col2 = st.columns([2, 1])
@@ -931,12 +1145,11 @@ if st.session_state.multi_signals:
             ### 🚀 Get AI-Powered Trading Signals
             
             **✨ What you get:**
-            - 📊 Real-time signals for 10+ trading pairs
+            - 📊 Real-time signals for major cryptocurrencies
             - 🎯 Entry, Stop Loss, and Take Profit levels
             - 📈 Multiple timeframes (15m, 1h, 4h, 1d)
             - 🔍 Detailed AI analysis with reasoning
             - 💰 Risk/Reward ratios for each trade
-            - 🏆 Top signals ranked by confidence
             
             **💎 Price: 25 USDT (BEP20) for 30 days access**
             """)
@@ -949,7 +1162,6 @@ if st.session_state.multi_signals:
                 <p>BEP20 Network</p>
                 <hr>
                 <p><strong>30 Days Access</strong></p>
-                <p>⚡ Instant activation with password</p>
             </div>
             """, unsafe_allow_html=True)
         
@@ -959,24 +1171,10 @@ if st.session_state.multi_signals:
         st.caption("Complete payment on the left to unlock real signals")
         
         preview_data = pd.DataFrame({
-            'Coin': ['BTC/USDT', 'ETH/USDT', 'BNB/USDT', 'SOL/USDT'],
-            'Signal': ['LONG', 'SHORT', 'LONG', 'LONG'],
-            'Confidence': ['87%', '76%', '82%', '79%'],
-            'Entry': ['$65,432', '$3,456', '$612', '$145'],
-            'Stop Loss': ['$64,123', '$3,525', '$600', '$142'],
-            'Take Profit': ['$67,890', '$3,387', '$642', '$152'],
-            'R:R': ['1:2.4', '1:1.8', '1:2.1', '1:2.0']
+            'Coin': ['BTC/USDT', 'ETH/USDT'],
+            'Signal': ['LONG', 'SHORT'],
+            'Confidence': ['87%', '76%'],
+            'Entry': ['$65,432', '$3,456'],
+            'R:R': ['1:2.4', '1:1.8']
         })
         st.dataframe(preview_data, use_container_width=True)
-        
-        # Quick instructions
-        with st.expander("📖 Quick Start Guide"):
-            st.markdown("""
-            1. **Copy** the wallet address from the left panel
-            2. **Send 25 USDT** (BEP20) to that address from Binance
-            3. **Contact us** on Telegram with proof of payment
-            4. **Receive password** and enter it above
-            5. **Click Unlock Access** - instant 30 days access!
-            
-            Need help? Contact us on Telegram: @vubajanja
-            """)
