@@ -462,230 +462,251 @@ if st.session_state.access_expiry:
         st.session_state.access_expiry = None
         st.session_state.payment_verified = False
 
-# Create two columns - Payment/Status on left, Content on right
-col_left, col_right = st.columns([1, 2])
+# Create two columns only if access NOT granted
+if not st.session_state.access_granted:
+    col_left, col_right = st.columns([1, 2])
+else:
+    # If access granted, use full width for content
+    col_left, col_right = None, st.container()
 
-with col_left:
-    st.image("favicon.png", width=50)
-    st.markdown("### 🔐 BEP20 USDT Access")
-    
-    # Show current status
-    if st.session_state.access_granted and st.session_state.access_expiry:
-        days_left = (st.session_state.access_expiry - datetime.now()).days
-        hours_left = ((st.session_state.access_expiry - datetime.now()).seconds // 3600)
+# LEFT COLUMN - Payment Stuff (Only shown when NOT granted)
+if not st.session_state.access_granted and col_left:
+    with col_left:
+        st.image("favicon.png", width=50)
+        st.markdown("### 🔐 BEP20 USDT Access")
+        
+        # Show current status
+        if st.session_state.access_granted and st.session_state.access_expiry:
+            days_left = (st.session_state.access_expiry - datetime.now()).days
+            hours_left = ((st.session_state.access_expiry - datetime.now()).seconds // 3600)
+            
+            st.markdown(f"""
+            <div style="background-color: #d4edda; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                <span class="access-badge">✅ ACTIVE</span>
+                <p style="margin-top: 10px; margin-bottom: 0;">
+                <strong>Expires:</strong> {st.session_state.access_expiry.strftime('%Y-%m-%d %H:%M')}<br>
+                <strong>Time left:</strong> {days_left} days {hours_left} hours
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style="background-color: #f8d7da; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
+                <span style="background-color: #dc3545; color: white; padding: 5px 15px; border-radius: 20px;">🔒 LOCKED</span>
+                <p style="margin-top: 10px; margin-bottom: 0;">Complete payment below for 30 days access</p>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        st.markdown("---")
+        
+        # Payment Section
+        st.markdown("### 💰 Purchase Access - 25 USDT")
         
         st.markdown(f"""
-        <div style="background-color: #d4edda; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
-            <span class="access-badge">✅ ACTIVE</span>
-            <p style="margin-top: 10px; margin-bottom: 0;">
-            <strong>Expires:</strong> {st.session_state.access_expiry.strftime('%Y-%m-%d %H:%M')}<br>
-            <strong>Time left:</strong> {days_left} days {hours_left} hours
-            </p>
+        <div class="payment-box">
+            <h2 style="margin: 0;">25 USDT</h2>
+            <p style="margin: 5px 0;">BEP20 (Binance Smart Chain)</p>
+            <p style="margin: 0;"><strong>30 Days Premium Access</strong></p>
         </div>
         """, unsafe_allow_html=True)
-    else:
-        st.markdown(f"""
-        <div style="background-color: #f8d7da; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
-            <span style="background-color: #dc3545; color: white; padding: 5px 15px; border-radius: 20px;">🔒 LOCKED</span>
-            <p style="margin-top: 10px; margin-bottom: 0;">Complete payment below for 30 days access</p>
-        </div>
-        """, unsafe_allow_html=True)
-    
-    st.markdown("---")
-    
-    # Payment Section
-    st.markdown("### 💰 Purchase Access - 25 USDT")
-    
-    st.markdown(f"""
-    <div class="payment-box">
-        <h2 style="margin: 0;">25 USDT</h2>
-        <p style="margin: 5px 0;">BEP20 (Binance Smart Chain)</p>
-        <p style="margin: 0;"><strong>30 Days Premium Access</strong></p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # ===== FIXED COPY SECTION =====
-    st.markdown("### 📋 Your Payment Address")
-    
-    # Method 1: st.code (easiest to copy)
-    st.code(YOUR_WALLET, language="text")
-    
-    st.markdown("""
-    **📋 Copy Instructions:**
-    1. Click inside the code box above
-    2. Press **Ctrl+A** (Windows) or **Cmd+A** (Mac)
-    3. Press **Ctrl+C** (Windows) or **Cmd+C** (Mac)
-    4. Paste into Binance app
-    """)
-    
-    # Method 2: Text input (backup)
-    st.text_input(
-        "✏️ Backup copy field:", 
-        value=YOUR_WALLET, 
-        key="backup_copy",
-        disabled=True,
-        help="Select the text and press Ctrl+C to copy"
-    )
-    
-    # Warning
-    st.error("⚠️ Send exactly 25 USDT on BEP20 network")
-    
-    st.markdown("---")
-    
-    # QR Code (optional - using your image)
-    with st.expander("📱 Show QR Code"):
-        try:
-            st.image(
-                "qr_code.jpeg",
-                caption="Scan with Binance app",
-                width=200
-            )
-            st.caption("Make sure you're sending 25 USDT on BEP20 network")
-            st.markdown("""
-            **Binance App Users:**  
-            1. Open Binance app
-            2. Go to Wallet → Transfer → Send
-            3. Tap the scan icon
-            4. Scan the QR code above
-            """)
-        except:
-            st.warning("QR code image not found. Please use the wallet address above.")
-    
-    st.markdown("---")
-    
-    # ===== PASSWORD ACCESS SYSTEM =====
-    st.markdown("### 🔑 Enter Access Password")
-    
-    # Password input (hidden characters)
-    access_password = st.text_input(
-        "Password:", 
-        type="password",
-        placeholder="Enter your 30-day access password",
-        key="access_password_input",
-        help="After sending payment, you'll receive a password"
-    )
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("🔓 Unlock Access", use_container_width=True, type="primary"):
-            if access_password:
-                # Admin override password (change this!)
-                admin_password = "password.me"
-                
-                if access_password == admin_password:
-                    st.session_state.access_granted = True
-                    st.session_state.access_expiry = datetime.now() + timedelta(seconds=ACCESS_DURATION)
-                    st.success("✅ Admin access granted!")
-                    st.balloons()
-                    st.rerun()
-                else:
-                    valid, message = st.session_state.password_manager.verify_password(access_password)
-                    if valid:
+        
+        # ===== FIXED COPY SECTION =====
+        st.markdown("### 📋 Your Payment Address")
+        
+        # Method 1: st.code (easiest to copy)
+        st.code(YOUR_WALLET, language="text")
+        
+        st.markdown("""
+        **📋 Copy Instructions:**
+        1. Click inside the code box above
+        2. Press **Ctrl+A** (Windows) or **Cmd+A** (Mac)
+        3. Press **Ctrl+C** (Windows) or **Cmd+C** (Mac)
+        4. Paste into Binance app
+        """)
+        
+        # Method 2: Text input (backup)
+        st.text_input(
+            "✏️ Backup copy field:", 
+            value=YOUR_WALLET, 
+            key="backup_copy",
+            disabled=True,
+            help="Select the text and press Ctrl+C to copy"
+        )
+        
+        # Warning
+        st.error("⚠️ Send exactly 25 USDT on BEP20 network")
+        
+        st.markdown("---")
+        
+        # QR Code (optional - using your image)
+        with st.expander("📱 Show QR Code"):
+            try:
+                st.image(
+                    "qr_code.jpeg",
+                    caption="Scan with Binance app",
+                    width=200
+                )
+                st.caption("Make sure you're sending 25 USDT on BEP20 network")
+                st.markdown("""
+                **Binance App Users:**  
+                1. Open Binance app
+                2. Go to Wallet → Transfer → Send
+                3. Tap the scan icon
+                4. Scan the QR code above
+                """)
+            except:
+                st.warning("QR code image not found. Please use the wallet address above.")
+        
+        st.markdown("---")
+        
+        # ===== PASSWORD ACCESS SYSTEM =====
+        st.markdown("### 🔑 Enter Access Password")
+        
+        # Password input (hidden characters)
+        access_password = st.text_input(
+            "Password:", 
+            type="password",
+            placeholder="Enter your 30-day access password",
+            key="access_password_input",
+            help="After sending payment, you'll receive a password"
+        )
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🔓 Unlock Access", use_container_width=True, type="primary"):
+                if access_password:
+                    # Admin override password (change this!)
+                    admin_password = "password.me"
+                    
+                    if access_password == admin_password:
                         st.session_state.access_granted = True
                         st.session_state.access_expiry = datetime.now() + timedelta(seconds=ACCESS_DURATION)
-                        st.success("✅ Access granted! Welcome to Premium!")
+                        st.success("✅ Admin access granted!")
                         st.balloons()
                         st.rerun()
                     else:
-                        st.error(f"❌ {message}")
+                        valid, message = st.session_state.password_manager.verify_password(access_password)
+                        if valid:
+                            st.session_state.access_granted = True
+                            st.session_state.access_expiry = datetime.now() + timedelta(seconds=ACCESS_DURATION)
+                            st.success("✅ Access granted! Welcome to Premium!")
+                            st.balloons()
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {message}")
+                else:
+                    st.warning("Please enter a password")
+        
+        with col2:
+            if st.button("🔄 Need Password?", use_container_width=True):
+                st.info("""
+                **Don't have a password?**
+                
+                1. Send 25 USDT to the address above
+                2. Take a screenshot of the transaction
+                3. Upload it in the form on the right
+                4. You'll receive password within 5 minutes
+                """)
+        
+        st.markdown("---")
+
+# RIGHT COLUMN - Payment Proof Upload (Only shown when NOT granted)
+if not st.session_state.access_granted and col_right:
+    with col_right:
+        st.markdown("### 📤 Submit Payment Proof")
+        
+        # File uploader for screenshot
+        uploaded_file = st.file_uploader(
+            "Upload payment screenshot", 
+            type=['png', 'jpg', 'jpeg'],
+            help="Take a screenshot of your successful 25 USDT payment and upload it here"
+        )
+        
+        # Optional: Add transaction ID for easier verification
+        tx_id = st.text_input(
+            "Transaction ID (optional)", 
+            placeholder="Paste your transaction ID here if available",
+            help="This helps us verify faster"
+        )
+        
+        # Optional: User contact info
+        col_a, col_b = st.columns(2)
+        with col_a:
+            user_telegram = st.text_input("Your Telegram (optional)", placeholder="@username", 
+                                          help="So we can send you the password faster")
+        with col_b:
+            user_email = st.text_input("Your Email (optional)", placeholder="email@example.com")
+        
+        # Submit button
+        if st.button("📨 Submit Payment Proof", use_container_width=True, type="primary"):
+            if uploaded_file is not None:
+                with st.spinner("Sending payment proof to admin..."):
+                    try:
+                        # Generate unique filename
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        random_id = secrets.token_hex(4)
+                        filename = f"{PAYMENT_PROOFS_DIR}/payment_{timestamp}_{random_id}.png"
+                        
+                        # Save the file locally
+                        with open(filename, "wb") as f:
+                            f.write(uploaded_file.getbuffer())
+                        
+                        # Prepare caption for Telegram
+                        caption = f"🔔 *NEW PAYMENT PROOF RECEIVED*\n\n"
+                        caption += f"⏰ *Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                        caption += f"💰 *Amount:* 25 USDT (BEP20)\n"
+                        caption += f"🔑 *TXID:* {tx_id or 'Not provided'}\n"
+                        caption += f"📱 *Telegram:* {user_telegram or 'Not provided'}\n"
+                        caption += f"📧 *Email:* {user_email or 'Not provided'}\n"
+                        caption += f"🆔 *File:* {filename}\n\n"
+                        caption += f"✅ *Action:* Reply with password or use admin panel"
+                        
+                        # Send to Telegram
+                        success, message = send_telegram_photo(filename, caption)
+                        
+                        if success:
+                            st.success("✅ Payment proof sent to admin! You'll receive your password soon.")
+                            
+                            # Show next steps
+                            st.info(f"""
+                            **📱 Next steps:**
+                            1. ✅ Admin received your payment proof
+                            2. 🔐 Password will be sent within 5 minutes
+                            3. 📨 Check your Telegram {user_telegram or 'messages'}
+                            4. 🔓 Enter password above to unlock access
+                            
+                            **⏱️ Expected response time: 2-5 minutes**
+                            """)
+                            
+                            st.balloons()
+                        else:
+                            st.error(f"❌ Failed to send to Telegram: {message}")
+                            st.warning("Please contact admin directly via the button below")
+                            
+                            # Save metadata for manual processing
+                            metadata_file = f"{PAYMENT_PROOFS_DIR}/payment_{timestamp}_{random_id}.txt"
+                            with open(metadata_file, "w") as f:
+                                f.write(f"Submission Time: {datetime.now()}\n")
+                                f.write(f"Transaction ID: {tx_id or 'Not provided'}\n")
+                                f.write(f"Telegram: {user_telegram or 'Not provided'}\n")
+                                f.write(f"Email: {user_email or 'Not provided'}\n")
+                                f.write(f"Status: Pending Manual Verification\n")
+                            
+                    except Exception as e:
+                        st.error(f"Error processing your request: {str(e)}")
             else:
-                st.warning("Please enter a password")
-    
-# ===== ENHANCED PASSWORD REQUEST SYSTEM WITH TELEGRAM =====
-with col2:
-    st.markdown("### 📤 Submit Payment Proof")
-    
-    # File uploader for screenshot
-    uploaded_file = st.file_uploader(
-        "Upload payment screenshot", 
-        type=['png', 'jpg', 'jpeg'],
-        help="Take a screenshot of your successful 25 USDT payment and upload it here"
-    )
-    
-    # Optional: Add transaction ID for easier verification
-    tx_id = st.text_input(
-        "Transaction ID (optional)", 
-        placeholder="Paste your transaction ID here if available",
-        help="This helps us verify faster"
-    )
-    
-    # Optional: User contact info
-    col_a, col_b = st.columns(2)
-    with col_a:
-        user_telegram = st.text_input("Your Telegram (optional)", placeholder="@username", 
-                                      help="So we can send you the password faster")
-    with col_b:
-        user_email = st.text_input("Your Email (optional)", placeholder="email@example.com")
-    
-    # Submit button
-    if st.button("📨 Submit Payment Proof", use_container_width=True, type="primary"):
-        if uploaded_file is not None:
-            with st.spinner("Sending payment proof to admin..."):
-                try:
-                    # Generate unique filename
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    random_id = secrets.token_hex(4)
-                    filename = f"{PAYMENT_PROOFS_DIR}/payment_{timestamp}_{random_id}.png"
-                    
-                    # Save the file locally
-                    with open(filename, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    
-                    # Prepare caption for Telegram
-                    caption = f"🔔 *NEW PAYMENT PROOF RECEIVED*\n\n"
-                    caption += f"⏰ *Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    caption += f"💰 *Amount:* 25 USDT (BEP20)\n"
-                    caption += f"🔑 *TXID:* {tx_id or 'Not provided'}\n"
-                    caption += f"📱 *Telegram:* {user_telegram or 'Not provided'}\n"
-                    caption += f"📧 *Email:* {user_email or 'Not provided'}\n"
-                    caption += f"🆔 *File:* {filename}\n\n"
-                    caption += f"✅ *Action:* Reply with password or use admin panel"
-                    
-                    # Send to Telegram
-                    success, message = send_telegram_photo(filename, caption)
-                    
-                    if success:
-                        st.success("✅ Payment proof sent to admin! You'll receive your password soon.")
-                        
-                        # Show next steps
-                        st.info(f"""
-                        **📱 Next steps:**
-                        1. ✅ Admin received your payment proof
-                        2. 🔐 Password will be sent within 5 minutes
-                        3. 📨 Check your Telegram {user_telegram or 'messages'}
-                        4. 🔓 Enter password above to unlock access
-                        
-                        **⏱️ Expected response time: 2-5 minutes**
-                        """)
-                        
-                        st.balloons()
-                    else:
-                        st.error(f"❌ Failed to send to Telegram: {message}")
-                        st.warning("Please contact admin directly via the button below")
-                        
-                        # Save metadata for manual processing
-                        metadata_file = f"{PAYMENT_PROOFS_DIR}/payment_{timestamp}_{random_id}.txt"
-                        with open(metadata_file, "w") as f:
-                            f.write(f"Submission Time: {datetime.now()}\n")
-                            f.write(f"Transaction ID: {tx_id or 'Not provided'}\n")
-                            f.write(f"Telegram: {user_telegram or 'Not provided'}\n")
-                            f.write(f"Email: {user_email or 'Not provided'}\n")
-                            f.write(f"Status: Pending Manual Verification\n")
-                        
-                except Exception as e:
-                    st.error(f"Error processing your request: {str(e)}")
-        else:
-            st.warning("Please upload a screenshot of your payment")
-    
-    # Direct contact button (backup)
-    st.markdown("""
-    <a href="https://t.me/vubajanja" target="_blank">
-        <button style="background-color: #0088cc; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px;">
-            📱 Contact Admin Directly
-        </button>
-    </a>
-    """, unsafe_allow_html=True)
+                st.warning("Please upload a screenshot of your payment")
+        
+        # Direct contact button (backup)
+        st.markdown("""
+        <a href="https://t.me/vubajanja" target="_blank">
+            <button style="background-color: #0088cc; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px;">
+                📱 Contact Admin Directly
+            </button>
+        </a>
+        """, unsafe_allow_html=True)
+
 # ===== ADMIN PANEL WITH PAYMENT PROOFS VIEWER =====
 with st.expander("👑 Admin Panel - Payment Proofs"):
     admin_auth = st.text_input("Admin Password:", type="password", key="admin_proofs_auth")
