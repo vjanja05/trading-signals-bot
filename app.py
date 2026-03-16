@@ -992,164 +992,177 @@ with content_container:
         })
         st.dataframe(preview_data, use_container_width=True)
 
-# ===== EVERYTHING ELSE ABOVE THIS LINE =====
-# ... (all your other code) ...
-
-# ===== ADMIN PANEL - ONLY VISIBLE TO ADMINS AT BOTTOM =====
-# Add a separator
+# ===== STANDALONE ADMIN PANEL - ALWAYS VISIBLE AT BOTTOM =====
 st.markdown("---")
 st.markdown("## ")
 
-# Only show admin panel if user is admin AND has access granted
-# You can set a specific admin password or check against a list
-ADMIN_PASSWORD = "ADMIN123"  # Change this to your admin password
+# Create a separator
+st.markdown("### 🔻 System Administration")
+st.markdown("*This section is for administrators only*")
 
-# Check if current user is admin (you can modify this logic)
-is_admin = False
-if st.session_state.get('access_granted'):
-    # You could check against a specific admin password in session
-    # For now, we'll use a separate admin login
-    pass
-
-# Create a separate expander for admin functions
-with st.expander("👑 Admin Panel (Restricted Access)", expanded=False):
-    # Admin authentication
-    admin_input = st.text_input("Enter Admin Password:", type="password", key="admin_main_auth")
+# Admin authentication - completely separate from user login
+with st.expander("👑 Click to Access Admin Panel", expanded=False):
     
-    if admin_input == ADMIN_PASSWORD:
-        st.success("✅ Admin authenticated")
+    admin_password_input = st.text_input(
+        "Enter Admin Password:", 
+        type="password", 
+        key="global_admin_auth",
+        placeholder="Enter admin password"
+    )
+    
+    # Check admin password (change this to your actual admin password)
+    MASTER_ADMIN_PASSWORD = "ADMIN123"  # <-- CHANGE THIS TO YOUR PASSWORD
+    
+    if admin_password_input == MASTER_ADMIN_PASSWORD:
+        st.success("✅ Admin access granted")
         
-        # Create tabs for admin functions
+        # Create tabs for different admin functions
         admin_tab1, admin_tab2, admin_tab3, admin_tab4 = st.tabs([
             "📂 Payment Proofs", 
             "🔑 Generate Password", 
             "✅ Grant Access",
-            "📊 System Info"
+            "📊 System Status"
         ])
         
+        # TAB 1: Payment Proofs
         with admin_tab1:
-            st.subheader("📂 Pending Payment Proofs")
+            st.subheader("📂 Payment Proofs")
             
-            # Show pending payment proofs
+            # Check if directory exists
             if os.path.exists(PAYMENT_PROOFS_DIR):
                 files = os.listdir(PAYMENT_PROOFS_DIR)
-                proof_files = [f for f in files if f.endswith('.png') or f.endswith('.jpg') or f.endswith('.jpeg')]
+                proof_files = [f for f in files if f.endswith(('.png', '.jpg', '.jpeg'))]
                 
                 if proof_files:
-                    st.write(f"**📊 {len(proof_files)} pending verifications**")
+                    st.write(f"**Total proofs:** {len(proof_files)}")
                     
-                    for file in sorted(proof_files, reverse=True)[:20]:  # Show latest 20
-                        with st.container():
-                            col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
-                            
-                            with col1:
-                                st.write(f"📄 {file}")
-                            
-                            with col2:
-                                # View button
-                                if st.button(f"👁️ View", key=f"admin_view_{file}"):
-                                    image_path = os.path.join(PAYMENT_PROOFS_DIR, file)
-                                    st.image(image_path, caption=file, width=300)
-                            
-                            with col3:
-                                # Check for metadata
-                                meta_file = file.replace('.png', '.txt').replace('.jpg', '.txt').replace('.jpeg', '.txt')
-                                if os.path.exists(os.path.join(PAYMENT_PROOFS_DIR, meta_file)):
-                                    if st.button(f"📋 Info", key=f"admin_info_{file}"):
-                                        with open(os.path.join(PAYMENT_PROOFS_DIR, meta_file), 'r') as f:
-                                            content = f.read()
-                                        st.text(content)
-                            
-                            with col4:
-                                # Mark as verified
-                                if st.button(f"✅ Verify", key=f"admin_verify_{file}"):
-                                    # You can add logic to mark as verified
-                                    st.success(f"Marked {file} as verified")
-                            
-                            st.divider()
+                    # Show files in a table
+                    proof_data = []
+                    for file in sorted(proof_files, reverse=True)[:20]:
+                        file_path = os.path.join(PAYMENT_PROOFS_DIR, file)
+                        file_size = os.path.getsize(file_path) / 1024  # KB
+                        modified = datetime.fromtimestamp(os.path.getmtime(file_path))
+                        
+                        # Check for metadata
+                        meta_file = file.replace('.png', '.txt').replace('.jpg', '.txt').replace('.jpeg', '.txt')
+                        has_meta = os.path.exists(os.path.join(PAYMENT_PROOFS_DIR, meta_file))
+                        
+                        proof_data.append({
+                            "File": file,
+                            "Size": f"{file_size:.1f} KB",
+                            "Modified": modified.strftime("%Y-%m-%d %H:%M"),
+                            "Meta": "✅" if has_meta else "❌"
+                        })
+                    
+                    st.dataframe(pd.DataFrame(proof_data), use_container_width=True)
+                    
+                    # View selected file
+                    selected_file = st.selectbox("Select file to view:", proof_files)
+                    if selected_file:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            image_path = os.path.join(PAYMENT_PROOFS_DIR, selected_file)
+                            st.image(image_path, caption=selected_file, width=300)
+                        with col2:
+                            # Show metadata if exists
+                            meta_file = selected_file.replace('.png', '.txt').replace('.jpg', '.txt').replace('.jpeg', '.txt')
+                            meta_path = os.path.join(PAYMENT_PROOFS_DIR, meta_file)
+                            if os.path.exists(meta_path):
+                                with open(meta_path, 'r') as f:
+                                    st.text(f.read())
                 else:
-                    st.info("No pending payment proofs")
+                    st.info("No payment proofs found")
             else:
-                st.info("Payment proofs directory not found")
+                st.warning("Payment proofs directory not found")
         
+        # TAB 2: Generate Password
         with admin_tab2:
             st.subheader("🔑 Generate Access Password")
             
             col1, col2 = st.columns(2)
             with col1:
-                days = st.number_input("Access days:", min_value=1, max_value=365, value=30, key="admin_gen_days")
+                days = st.number_input("Access duration (days):", min_value=1, max_value=365, value=30)
             with col2:
-                notes = st.text_input("Notes (optional):", placeholder="User info")
+                user_info = st.text_input("User info (optional):", placeholder="Telegram/Email")
             
-            if st.button("🎲 Generate New Password", key="admin_gen_btn", use_container_width=True):
-                new_pwd = st.session_state.password_manager.generate_password(days)
-                st.success(f"✅ New password generated:")
-                st.code(new_pwd, language="text")
+            if st.button("🎲 Generate New Password", use_container_width=True):
+                new_password = st.session_state.password_manager.generate_password(days)
                 
-                # Show password details
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.info(f"📅 Valid for: {days} days")
-                with col2:
-                    expiry = datetime.now() + timedelta(days=days)
-                    st.info(f"⏰ Expires: {expiry.strftime('%Y-%m-%d')}")
+                st.success("✅ Password generated successfully!")
                 
-                # Copy button (manual)
+                # Display password prominently
                 st.markdown(f"""
-                <div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 10px;">
-                    <p style="margin: 0;">📋 Password: <strong>{new_pwd}</strong></p>
+                <div style="background-color: #d4edda; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;">
+                    <h3 style="color: #155724; margin: 0;">🔐 {new_password}</h3>
                 </div>
                 """, unsafe_allow_html=True)
+                
+                # Show details
+                expiry = datetime.now() + timedelta(days=days)
+                st.info(f"📅 Expires: {expiry.strftime('%Y-%m-%d %H:%M')}")
+                if user_info:
+                    st.caption(f"👤 For: {user_info}")
         
+        # TAB 3: Grant Access
         with admin_tab3:
-            st.subheader("✅ Manually Grant Access")
+            st.subheader("✅ Grant Manual Access")
             
-            col1, col2 = st.columns(2)
-            with col1:
-                grant_days = st.number_input("Grant access for (days):", min_value=1, max_value=365, value=30, key="admin_grant_days")
+            grant_days = st.number_input("Grant access for (days):", min_value=1, max_value=365, value=30, key="grant_days")
             
-            if st.button("🔓 Grant Access to Current Session", key="admin_grant_btn", use_container_width=True, type="primary"):
+            if st.button("🔓 Grant Access to Current Session", use_container_width=True, type="primary"):
                 st.session_state.access_granted = True
                 st.session_state.access_expiry = datetime.now() + timedelta(days=grant_days)
                 st.success(f"✅ Access granted for {grant_days} days!")
                 st.info(f"Expires: {st.session_state.access_expiry.strftime('%Y-%m-%d %H:%M')}")
-                st.rerun()
         
+        # TAB 4: System Status
         with admin_tab4:
-            st.subheader("📊 System Information")
+            st.subheader("📊 System Status")
             
-            # System stats
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                st.metric("Total Passwords", len(st.session_state.password_manager.valid_passwords))
-            with col2:
-                used = sum(1 for p in st.session_state.password_manager.valid_passwords.values() if p['used'])
-                st.metric("Used Passwords", used)
-            with col3:
-                active = len(st.session_state.password_manager.list_active_passwords())
-                st.metric("Active Passwords", active)
+            # Session state info
+            with st.expander("Session State"):
+                state_info = {}
+                for key, value in st.session_state.items():
+                    if key != 'password_manager':  # Skip large objects
+                        state_info[key] = str(value)
+                st.json(state_info)
             
-            # Data sources info
-            st.subheader("📡 Data Sources")
-            if st.session_state.get('available_sources'):
-                for source in st.session_state.available_sources:
-                    st.write(f"✅ {source}")
-            else:
-                st.write("❌ No sources available")
+            # Password manager stats
+            with st.expander("Password Manager"):
+                pm = st.session_state.password_manager
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Passwords", len(pm.valid_passwords))
+                with col2:
+                    used = sum(1 for p in pm.valid_passwords.values() if p['used'])
+                    st.metric("Used", used)
+                with col3:
+                    active = len([p for p in pm.valid_passwords.values() if not p['used']])
+                    st.metric("Available", active)
             
-            # Test connection button
-            if st.button("Test Data Connections", key="admin_test_conn"):
+            # Data sources
+            with st.expander("Data Sources"):
+                if hasattr(bot, 'data_sources') and bot.data_sources:
+                    for name, _ in bot.data_sources:
+                        st.write(f"✅ {name}")
+                else:
+                    st.warning("No data sources loaded")
+            
+            # Test connections
+            if st.button("Test Data Connections"):
                 with st.spinner("Testing connections..."):
-                    for name, exchange in bot.data_sources:
-                        try:
-                            ticker = exchange.fetch_ticker('BTC/USDT')
-                            st.success(f"✅ {name}: BTC = ${ticker['last']}")
-                        except Exception as e:
-                            st.error(f"❌ {name}: {str(e)[:100]}")
+                    if hasattr(bot, 'data_sources'):
+                        for name, exchange in bot.data_sources:
+                            try:
+                                ticker = exchange.fetch_ticker('BTC/USDT')
+                                st.success(f"✅ {name}: BTC = ${ticker['last']:,.2f}")
+                            except Exception as e:
+                                st.error(f"❌ {name}: {str(e)[:50]}")
     
-    elif admin_input:
+    elif admin_password_input:
         st.error("❌ Invalid admin password")
 
-# Optional: Add a small footer
+# Final footer
 st.markdown("---")
 st.caption("© 2024 Futures Big Bot. All rights reserved.")
+st.caption("🔧 Admin panel is always available at help")
