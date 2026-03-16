@@ -110,165 +110,88 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
-# ===== COMPLETELY HIDE ALL STREAMLIT BRANDING & CONTROLS =====
-hide_all_streamlit_elements = """
+# ===== HIDE ONLY STREAMLIT BRANDING, KEEP APP VISIBLE =====
+hide_streamlit_branding = """
     <style>
-        /* Hide the entire header with GitHub icon, menu, and manage app button */
+        /* Hide only the Streamlit header with GitHub icon and menu */
         header {visibility: hidden !important;}
         .stApp header {display: none !important;}
         
-        /* Hide the main menu (three dots) */
-        #MainMenu {display: none !important;}
+        /* Hide the footer "Made with Streamlit" */
+        footer {visibility: hidden !important;}
         
-        /* Hide the footer */
-        footer {display: none !important;}
-        
-        /* Hide the "Manage app" button specifically */
+        /* Hide the "Manage app" button and deployment options */
         .stApp [data-testid="stStatusWidget"] {display: none !important;}
         .stApp [data-testid="stDecoration"] {display: none !important;}
         
         /* Hide GitHub icon and deploy button */
         .viewerBadge_container__1QSob,
         .viewerBadge_link__1S137,
-        .viewerBadge_text__1JaDK,
-        .css-1jc7ptx,
-        .e1ewe7hr3,
-        .styles_viewerBadge__1yB5_,
-        [data-testid="stHeader"] {
+        .viewerBadge_text__1JaDK {
             display: none !important;
         }
         
-        /* Hide any iframe or embedded elements */
-        iframe {display: none !important;}
-        
-        /* Hide the toolbar completely */
-        .stToolbar {display: none !important;}
+        /* Hide the three dots menu */
+        #MainMenu {visibility: hidden !important;}
         
         /* Hide the running man animation */
         .stApp [data-testid="stStatusWidget"] {
             display: none !important;
         }
         
-        /* Remove top padding */
+        /* Remove extra padding at top (but keep app visible) */
         .main .block-container {
-            padding-top: 0rem !important;
-            padding-bottom: 0rem !important;
-            max-width: 100% !important;
+            padding-top: 2rem !important;
+            padding-bottom: 2rem !important;
         }
         
-        /* Mobile-specific fixes */
+        /* Keep all app content visible - DO NOT hide these */
+        /* .stApp, .main, .block-container, div, section are ALL visible */
+        
+        /* Mobile-specific - only hide Streamlit elements */
         @media (max-width: 640px) {
-            /* Hide mobile menu */
+            /* Hide Streamlit mobile menu only */
             .stApp [data-testid="collapsedControl"] {
                 display: none !important;
             }
             
-            /* Hide any floating buttons */
-            .st-emotion-cache-1dp5vir {
-                display: none !important;
-            }
-            
-            /* Hide GitHub corner on mobile */
-            .st-emotion-cache-1gulkj5 {
-                display: none !important;
-            }
-            
-            /* Remove any top bars */
-            .st-emotion-cache-12fmjuu {
-                display: none !important;
-            }
-            
-            /* Hide any streamlit watermarks */
-            .st-emotion-cache-1mi2ry5 {
-                display: none !important;
-            }
-            
-            /* Make content full width */
+            /* Keep app content visible */
             .st-emotion-cache-1y4p8pa {
-                padding: 1rem 0.5rem !important;
-                max-width: 100% !important;
+                padding: 1rem !important;
+                visibility: visible !important;
+                display: block !important;
             }
         }
         
-        /* Hide specific Streamlit class names */
-        .st-emotion-cache-1avcm0n {display: none !important;} /* Header */
-        .st-emotion-cache-18ni7ap {display: none !important;} /* Menu */
-        .st-emotion-cache-1dp5vir {display: none !important;} /* Toolbar */
-        .st-emotion-cache-1gulkj5 {display: none !important;} /* GitHub icon */
-        .st-emotion-cache-12fmjuu {display: none !important;} /* Top bar */
-        .st-emotion-cache-1mi2ry5 {display: none !important;} /* Watermark */
-        .st-emotion-cache-1y4p8pa {padding: 1rem !important;} /* Main content */
-        
-        /* Hide any potential popups */
-        .st-emotion-cache-1r6slb0 {display: none !important;}
-        .st-emotion-cache-1wmy9hl {display: none !important;}
-        
-        /* Hide the "Hosted with Streamlit" badge */
-        [data-testid="stDecoration"] {display: none !important;}
-        
-        /* Hide the "Deploy" button */
-        button[kind="header"] {display: none !important;}
-        
-        /* Make sure no white space at top */
+        /* Ensure app content is visible */
         .stApp {
-            margin-top: 0 !important;
-            padding-top: 0 !important;
+            background-color: #0E1117;  /* Keep your dark theme */
+            visibility: visible !important;
         }
         
-        /* Remove any gradient lines */
-        .stDecoration {
-            display: none !important;
+        .main {
+            visibility: visible !important;
         }
         
-        /* Hide any avatar or profile icons */
-        [data-testid="stSidebarNav"] {display: none !important;}
+        .block-container {
+            visibility: visible !important;
+        }
         
-        /* Final cleanup - hide anything that might have streamlit in it */
-        [class*="streamlit"] {display: none !important;}
-        [class*="Streamlit"] {display: none !important;}
-        [id*="streamlit"] {display: none !important;}
-        [id*="Streamlit"] {display: none !important;}
+        /* Make sure all your widgets are visible */
+        .stButton, .stTextInput, .stSelectbox, .stMultiselect,
+        .stCheckbox, .stDataFrame, .stImage, .stPlotlyChart {
+            visibility: visible !important;
+        }
+        
+        /* Keep your custom CSS classes visible */
+        .signal-long, .signal-short, .signal-neutral,
+        .payment-box, .access-badge, .wallet-address {
+            visibility: visible !important;
+        }
     </style>
-    
-    <!-- JavaScript to remove any dynamic elements -->
-    <script>
-        // Run after page load to remove any stubborn elements
-        window.addEventListener('load', function() {
-            // Remove header
-            const header = document.querySelector('header');
-            if (header) header.style.display = 'none';
-            
-            // Remove footer
-            const footer = document.querySelector('footer');
-            if (footer) footer.style.display = 'none';
-            
-            // Remove any iframes
-            const iframes = document.querySelectorAll('iframe');
-            iframes.forEach(iframe => iframe.style.display = 'none');
-            
-            // Remove any streamlit badges
-            const badges = document.querySelectorAll('[class*="badge"]');
-            badges.forEach(badge => badge.style.display = 'none');
-            
-            // Remove GitHub corner
-            const github = document.querySelector('[class*="github"]');
-            if (github) github.style.display = 'none';
-        });
-        
-        // Also run on dynamic updates
-        const observer = new MutationObserver(function(mutations) {
-            const header = document.querySelector('header');
-            if (header) header.style.display = 'none';
-            
-            const footer = document.querySelector('footer');
-            if (footer) footer.style.display = 'none';
-        });
-        
-        observer.observe(document.body, { childList: true, subtree: true });
-    </script>
 """
 
-st.markdown(hide_all_streamlit_elements, unsafe_allow_html=True)
+st.markdown(hide_streamlit_branding, unsafe_allow_html=True)
 
 # Optional: Also hide the toolbar via config (but CSS above should handle it)
 # Custom CSS
