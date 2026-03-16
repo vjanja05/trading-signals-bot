@@ -201,17 +201,6 @@ if 'payment_address_copied' not in st.session_state:
 if 'password_manager' not in st.session_state:
     st.session_state.password_manager = PasswordManager()
     
-    # Add some demo passwords (remove in production)
-    st.session_state.password_manager.valid_passwords["DEMO123"] = {
-        'created': datetime.now(),
-        'expiry': datetime.now() + timedelta(days=30),
-        'used': False
-    }
-    st.session_state.password_manager.valid_passwords["TEST456"] = {
-        'created': datetime.now(),
-        'expiry': datetime.now() + timedelta(days=30),
-        'used': False
-    }
 
 
 class TradingSignalBot:
