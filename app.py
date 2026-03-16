@@ -102,13 +102,71 @@ class PasswordManager:
                 })
         return active
 
-# Page configuration
+# Page configuration (MUST be the first Streamlit command)
 st.set_page_config(
     page_title="Futures Big Bot",
     page_icon="favicon.png",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="auto"
 )
 
+# ===== COMPLETE UI CLEANUP =====
+clean_ui = """
+    <style>
+        /* Remove Streamlit branding */
+        #MainMenu {visibility: hidden;}
+        footer {visibility: hidden;}
+        header {visibility: hidden;}
+        
+        /* Remove GitHub icon and deploy button */
+        .css-1jc7ptx, .e1ewe7hr3, .viewerBadge_container__1QSob,
+        .styles_viewerBadge__1yB5_, .viewerBadge_link__1S137,
+        .viewerBadge_text__1JaDK {
+            display: none;
+        }
+        
+        /* Remove the "Deploy" button */
+        button[title="View deploy options"] {
+            display: none !important;
+        }
+        
+        /* Remove the running man animation */
+        .stApp [data-testid="stStatusWidget"] {
+            display: none !important;
+        }
+        
+        /* Adjust main container padding */
+        .main .block-container {
+            padding-top: 1rem;
+            padding-bottom: 0rem;
+            max-width: 100%;
+        }
+        
+        /* Make sidebar cleaner if you use it */
+        .css-1d391kg {
+            padding-top: 1rem;
+        }
+        
+        /* Remove any remaining Streamlit decorations */
+        .stApp > header {
+            display: none !important;
+        }
+        
+        /* Hide the "Hosted with Streamlit" badge */
+        .stApp [data-testid="stDecoration"] {
+            display: none !important;
+        }
+        
+        /* Remove the gradient line at the top */
+        .stApp > .stDecoration {
+            display: none !important;
+        }
+    </style>
+"""
+
+st.markdown(clean_ui, unsafe_allow_html=True)
+
+# Optional: Also hide the toolbar via config (but CSS above should handle it)
 # Custom CSS
 st.markdown("""
     <style>
