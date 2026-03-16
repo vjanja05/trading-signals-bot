@@ -599,17 +599,16 @@ if not st.session_state.access_granted and col_left:
                     st.warning("Please enter a password")
         
         with col2:
-            if st.button("🔄 Need Password?", use_container_width=True):
-                st.info("""
-                **Don't have a password?**
-                
-                1. Send 25 USDT to the address above
-                2. Take a screenshot of the transaction
-                3. Upload it in the form on the right
-                4. You'll receive password within 5 minutes
-                """)
+            # Direct contact button (backup)
+            st.markdown("""
+            <a href="https://t.me/vubajanja" target="_blank">
+                <button style="background-color: #0088cc; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px;">
+                    📱 Contact Admin Directly
+                </button>
+            </a>
+            """, unsafe_allow_html=True)
         
-        st.markdown("---")
+
 
 # RIGHT COLUMN - Payment Proof Upload (Only shown when NOT granted)
 if not st.session_state.access_granted and col_right:
