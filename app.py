@@ -193,6 +193,62 @@ hide_streamlit_branding = """
 
 st.markdown(hide_streamlit_branding, unsafe_allow_html=True)
 
+# ===== HIDE ONLY STREAMLIT TOOLBAR ICONS ON MOBILE =====
+hide_mobile_icons = """
+    <style>
+        /* Hide the Streamlit toolbar that appears on mobile */
+        .stApp [data-testid="stToolbar"] {display: none !important;}
+        .stApp [data-testid="stDecoration"] {display: none !important;}
+        
+        /* Hide the specific icons in your screenshot */
+        .stApp [data-testid="baseButton-header"] {display: none !important;}
+        .stApp [data-testid="stStatusWidget"] {display: none !important;}
+        
+        /* Hide the three dots menu */
+        .stApp [data-testid="main-menu"] {display: none !important;}
+        .stApp [data-testid="menu-button"] {display: none !important;}
+        
+        /* Hide the "Hosted with Streamlit" badge */
+        .stApp [data-testid="stBadge"] {display: none !important;}
+        
+        /* Hide any floating buttons */
+        .st-emotion-cache-1dp5vir {display: none !important;}
+        .st-emotion-cache-1gulkj5 {display: none !important;}
+        
+        /* Keep your app content fully visible */
+        .main .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 1rem !important;
+            max-width: 100% !important;
+        }
+        
+        /* Ensure all your content stays visible */
+        div[data-testid="stImage"], 
+        div[data-testid="stMarkdown"],
+        div[data-testid="stButton"],
+        div[data-testid="stTextInput"],
+        div[data-testid="stSelectbox"],
+        div[data-testid="stDataFrame"] {
+            visibility: visible !important;
+            display: block !important;
+        }
+        
+        /* Mobile specific fixes */
+        @media (max-width: 640px) {
+            /* Remove extra padding that Streamlit adds */
+            .st-emotion-cache-1y4p8pa {
+                padding: 1rem 0.5rem !important;
+            }
+            
+            /* Hide toolbar but keep content */
+            .st-emotion-cache-12fmjuu {display: none !important;}
+            .st-emotion-cache-1mi2ry5 {display: none !important;}
+        }
+    </style>
+"""
+
+st.markdown(hide_mobile_icons, unsafe_allow_html=True)
+
 # Optional: Also hide the toolbar via config (but CSS above should handle it)
 # Custom CSS
 st.markdown("""
