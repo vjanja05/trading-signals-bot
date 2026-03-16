@@ -842,76 +842,78 @@ with col_right:
                 st.session_state.multi_signals = all_signals
                 st.session_state.last_update = datetime.now()
         
-        # Display signals
-        if st.session_state.multi_signals:
-            # Summary metrics
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("📊 Coins Scanned", len(st.session_state.multi_signals))
-            with col2:
-                bullish = sum(1 for s in st.session_state.multi_signals if s['signal'] == "LONG")
-                st.metric("🟢 Bullish", bullish)
-            with col3:
-                bearish = sum(1 for s in st.session_state.multi_signals if s['signal'] == "SHORT")
-                st.metric("🔴 Bearish", bearish)
-            with col4:
-                best_conf = max([s['confidence'] for s in st.session_state.multi_signals])
-                st.metric("⭐ Best Confidence", f"{best_conf}%")
-            
-            st.markdown("---")
-            
-            # Top signals table
-            signal_data = []
-            for s in st.session_state.multi_signals[:10]:
-                signal_data.append({
-                    "Coin": s['coin'],
-                    "Signal": s['signal'],
-                    "Confidence": f"{s['confidence']}%",
-                    "Entry": f"${s['current_price']:,.2f}",
-                    "Stop Loss": f"${s['stop_loss']:,.2f}",
-                    "Take Profit": f"${s['take_profit']:,.2f}",
-                    "R:R": f"1:{s['risk_reward_ratio']:.2f}"
-                })
-            
-            signal_df = pd.DataFrame(signal_data)
-            
-            # Color code signals
-            def color_signal(val):
-                if val == "LONG":
-                    return 'background-color: #d4edda; color: #155724'
-                elif val == "SHORT":
-                    return 'background-color: #f8d7da; color: #721c24'
-                return ''
-            
-            styled_df = signal_df.style.applymap(color_signal, subset=['Signal'])
-            st.dataframe(styled_df, use_container_width=True, height=400)
-            
-            # Best signal details
-            if st.session_state.multi_signals:
-                best = st.session_state.multi_signals[0]
-                st.markdown("---")
-                st.subheader(f"🏆 Best Signal: {best['coin']}")
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.info(f"**Signal:** {best['signal']}")
-                    st.info(f"**Confidence:** {best['confidence']}%")
-                with col2:
-                    st.info(f"**Entry:** ${best['current_price']:,.2f}")
-                    st.info(f"**Stop Loss:** ${best['stop_loss']:,.2f}")
-                with col3:
-                    st.info(f"**Take Profit:** ${best['take_profit']:,.2f}")
-                    st.info(f"**Risk/Reward:** 1:{best['risk_reward_ratio']:.2f}")
-                
-                with st.expander("📊 Analysis Details"):
-                    for reason in best['reasons']:
-                        st.write(f"• {reason}")
-            
-            # Last update time
-            st.caption(f"Last updated: {st.session_state.last_update.strftime('%Y-%m-%d %H:%M:%S')}")
+# Display signals
+if st.session_state.multi_signals:
+    # Summary metrics
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("📊 Coins Scanned", len(st.session_state.multi_signals))
+    with col2:
+        bullish = sum(1 for s in st.session_state.multi_signals if s['signal'] == "LONG")
+        st.metric("🟢 Bullish", bullish)
+    with col3:
+        bearish = sum(1 for s in st.session_state.multi_signals if s['signal'] == "SHORT")
+        st.metric("🔴 Bearish", bearish)
+    with col4:
+        best_conf = max([s['confidence'] for s in st.session_state.multi_signals])
+        st.metric("⭐ Best Confidence", f"{best_conf}%")
+    
+    st.markdown("---")
+    
+    # Top signals table
+    signal_data = []
+    for s in st.session_state.multi_signals[:10]:
+        # Handle None values safely
+        stop_loss_str = f"${s['stop_loss']:,.2f}" if s.get('stop_loss') is not None else "N/A"
+        take_profit_str = f"${s['take_profit']:,.2f}" if s.get('take_profit') is not None else "N/A"
+        rr_str = f"1:{s['risk_reward_ratio']:.2f}" if s.get('risk_reward_ratio') is not None else "N/A"
         
-        else:
-            st.info("👈 Select coins and click 'Generate Signals' to start")
+        signal_data.append({
+            "Coin": s['coin'],
+            "Signal": s['signal'],
+            "Confidence": f"{s['confidence']}%",
+            "Entry": f"${s['current_price']:,.2f}",
+            "Stop Loss": stop_loss_str,
+            "Take Profit": take_profit_str,
+            "R:R": rr_str
+        })
+    
+    signal_df = pd.DataFrame(signal_data)
+    
+    # Color code signals
+    def color_signal(val):
+        if val == "LONG":
+            return 'background-color: #d4edda; color: #155724'
+        elif val == "SHORT":
+            return 'background-color: #f8d7da; color: #721c24'
+        return ''
+    
+    styled_df = signal_df.style.applymap(color_signal, subset=['Signal'])
+    st.dataframe(styled_df, use_container_width=True, height=400)
+    
+    # Best signal details
+    if st.session_state.multi_signals:
+        best = st.session_state.multi_signals[0]
+        st.markdown("---")
+        st.subheader(f"🏆 Best Signal: {best['coin']}")
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.info(f"**Signal:** {best['signal']}")
+            st.info(f"**Confidence:** {best['confidence']}%")
+        with col2:
+            st.info(f"**Entry:** ${best['current_price']:,.2f}")
+            stop_loss_display = f"${best['stop_loss']:,.2f}" if best.get('stop_loss') else "N/A"
+            st.info(f"**Stop Loss:** {stop_loss_display}")
+        with col3:
+            take_profit_display = f"${best['take_profit']:,.2f}" if best.get('take_profit') else "N/A"
+            st.info(f"**Take Profit:** {take_profit_display}")
+            rr_display = f"1:{best['risk_reward_ratio']:.2f}" if best.get('risk_reward_ratio') else "N/A"
+            st.info(f"**Risk/Reward:** {rr_display}")
+        
+        with st.expander("📊 Analysis Details"):
+            for reason in best['reasons']:
+                st.write(f"• {reason}")
         
         # Auto-refresh
         if auto_refresh and st.session_state.multi_signals:
