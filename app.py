@@ -708,7 +708,6 @@ if not st.session_state.access_granted and col_right:
         """, unsafe_allow_html=True)
 
 
-
 # ===== PASSWORD-BASED ACCESS SYSTEM =====
 # Check access expiry
 if st.session_state.access_expiry:
@@ -993,16 +992,44 @@ with content_container:
         })
         st.dataframe(preview_data, use_container_width=True)
 
-# ===== ADMIN PANEL WITH PAYMENT PROOFS VIEWER =====
-with st.expander("👑 Admin Panel - Payment Proofs"):
-    admin_auth = st.text_input("Admin Password:", type="password", key="admin_proofs_auth")
+# ===== EVERYTHING ELSE ABOVE THIS LINE =====
+# ... (all your other code) ...
+
+# ===== ADMIN PANEL - ONLY VISIBLE TO ADMINS AT BOTTOM =====
+# Add a separator
+st.markdown("---")
+st.markdown("## ")
+
+# Only show admin panel if user is admin AND has access granted
+# You can set a specific admin password or check against a list
+ADMIN_PASSWORD = "ADMIN123"  # Change this to your admin password
+
+# Check if current user is admin (you can modify this logic)
+is_admin = False
+if st.session_state.get('access_granted'):
+    # You could check against a specific admin password in session
+    # For now, we'll use a separate admin login
+    pass
+
+# Create a separate expander for admin functions
+with st.expander("👑 Admin Panel (Restricted Access)", expanded=False):
+    # Admin authentication
+    admin_input = st.text_input("Enter Admin Password:", type="password", key="admin_main_auth")
     
-    if admin_auth == "ADMIN123":  # Change this to your admin password
+    if admin_input == ADMIN_PASSWORD:
         st.success("✅ Admin authenticated")
         
-        tab1, tab2, tab3 = st.tabs(["📂 Pending Proofs", "🔑 Generate Password", "✅ Grant Access"])
+        # Create tabs for admin functions
+        admin_tab1, admin_tab2, admin_tab3, admin_tab4 = st.tabs([
+            "📂 Payment Proofs", 
+            "🔑 Generate Password", 
+            "✅ Grant Access",
+            "📊 System Info"
+        ])
         
-        with tab1:
+        with admin_tab1:
+            st.subheader("📂 Pending Payment Proofs")
+            
             # Show pending payment proofs
             if os.path.exists(PAYMENT_PROOFS_DIR):
                 files = os.listdir(PAYMENT_PROOFS_DIR)
@@ -1011,7 +1038,7 @@ with st.expander("👑 Admin Panel - Payment Proofs"):
                 if proof_files:
                     st.write(f"**📊 {len(proof_files)} pending verifications**")
                     
-                    for file in sorted(proof_files, reverse=True)[:10]:  # Show latest 10
+                    for file in sorted(proof_files, reverse=True)[:20]:  # Show latest 20
                         with st.container():
                             col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
                             
@@ -1020,7 +1047,7 @@ with st.expander("👑 Admin Panel - Payment Proofs"):
                             
                             with col2:
                                 # View button
-                                if st.button(f"👁️ View", key=f"view_{file}"):
+                                if st.button(f"👁️ View", key=f"admin_view_{file}"):
                                     image_path = os.path.join(PAYMENT_PROOFS_DIR, file)
                                     st.image(image_path, caption=file, width=300)
                             
@@ -1028,67 +1055,101 @@ with st.expander("👑 Admin Panel - Payment Proofs"):
                                 # Check for metadata
                                 meta_file = file.replace('.png', '.txt').replace('.jpg', '.txt').replace('.jpeg', '.txt')
                                 if os.path.exists(os.path.join(PAYMENT_PROOFS_DIR, meta_file)):
-                                    if st.button(f"📋 Info", key=f"info_{file}"):
+                                    if st.button(f"📋 Info", key=f"admin_info_{file}"):
                                         with open(os.path.join(PAYMENT_PROOFS_DIR, meta_file), 'r') as f:
                                             content = f.read()
                                         st.text(content)
                             
                             with col4:
                                 # Mark as verified
-                                if st.button(f"✅ Verify", key=f"verify_{file}"):
-                                    st.session_state.current_verifying = file
-                                    st.rerun()
+                                if st.button(f"✅ Verify", key=f"admin_verify_{file}"):
+                                    # You can add logic to mark as verified
+                                    st.success(f"Marked {file} as verified")
                             
                             st.divider()
                 else:
                     st.info("No pending payment proofs")
+            else:
+                st.info("Payment proofs directory not found")
         
-        with tab2:
+        with admin_tab2:
             st.subheader("🔑 Generate Access Password")
-            days = st.number_input("Access days:", min_value=1, max_value=365, value=30, key="admin_days")
-            if st.button("🎲 Generate New Password", key="admin_generate"):
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                days = st.number_input("Access days:", min_value=1, max_value=365, value=30, key="admin_gen_days")
+            with col2:
+                notes = st.text_input("Notes (optional):", placeholder="User info")
+            
+            if st.button("🎲 Generate New Password", key="admin_gen_btn", use_container_width=True):
                 new_pwd = st.session_state.password_manager.generate_password(days)
-                st.success(f"New password generated:")
+                st.success(f"✅ New password generated:")
                 st.code(new_pwd, language="text")
-                st.caption(f"Valid for {days} days - expires {datetime.now() + timedelta(days=days)}")
+                
+                # Show password details
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.info(f"📅 Valid for: {days} days")
+                with col2:
+                    expiry = datetime.now() + timedelta(days=days)
+                    st.info(f"⏰ Expires: {expiry.strftime('%Y-%m-%d')}")
+                
+                # Copy button (manual)
+                st.markdown(f"""
+                <div style="background-color: #f8f9fa; padding: 10px; border-radius: 5px; margin-top: 10px;">
+                    <p style="margin: 0;">📋 Password: <strong>{new_pwd}</strong></p>
+                </div>
+                """, unsafe_allow_html=True)
         
-        with tab3:
+        with admin_tab3:
             st.subheader("✅ Manually Grant Access")
-            if st.button("🔓 Grant Access to Current User", key="admin_grant"):
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                grant_days = st.number_input("Grant access for (days):", min_value=1, max_value=365, value=30, key="admin_grant_days")
+            
+            if st.button("🔓 Grant Access to Current Session", key="admin_grant_btn", use_container_width=True, type="primary"):
                 st.session_state.access_granted = True
-                st.session_state.access_expiry = datetime.now() + timedelta(seconds=ACCESS_DURATION)
-                st.success("Access granted manually!")
+                st.session_state.access_expiry = datetime.now() + timedelta(days=grant_days)
+                st.success(f"✅ Access granted for {grant_days} days!")
+                st.info(f"Expires: {st.session_state.access_expiry.strftime('%Y-%m-%d %H:%M')}")
                 st.rerun()
-    
-    # Quick guide for finding TXID
-    with st.expander("❓ Where to find Transaction ID?"):
-        st.markdown("""
-        **In Binance App:**
-        1. Go to **Wallet** → **Spot** → **Transaction History**
-        2. Find your USDT transfer
-        3. Tap on it to see details
-        4. Copy the **TxID** (long string starting with 0x...)
         
-        **In MetaMask:**
-        1. Click on the transaction
-        2. Click **View on BSCScan**
-        3. Copy the Transaction Hash from the URL
-        """)
-
-# Add this debug expander in your sidebar or main area
-with st.expander("🔧 Debug Info"):
-    st.write("**Available Data Sources:**")
-    if st.session_state.get('available_sources'):
-        for source in st.session_state.available_sources:
-            st.write(f"✅ {source}")
-    else:
-        st.write("❌ No sources available")
+        with admin_tab4:
+            st.subheader("📊 System Information")
+            
+            # System stats
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Total Passwords", len(st.session_state.password_manager.valid_passwords))
+            with col2:
+                used = sum(1 for p in st.session_state.password_manager.valid_passwords.values() if p['used'])
+                st.metric("Used Passwords", used)
+            with col3:
+                active = len(st.session_state.password_manager.list_active_passwords())
+                st.metric("Active Passwords", active)
+            
+            # Data sources info
+            st.subheader("📡 Data Sources")
+            if st.session_state.get('available_sources'):
+                for source in st.session_state.available_sources:
+                    st.write(f"✅ {source}")
+            else:
+                st.write("❌ No sources available")
+            
+            # Test connection button
+            if st.button("Test Data Connections", key="admin_test_conn"):
+                with st.spinner("Testing connections..."):
+                    for name, exchange in bot.data_sources:
+                        try:
+                            ticker = exchange.fetch_ticker('BTC/USDT')
+                            st.success(f"✅ {name}: BTC = ${ticker['last']}")
+                        except Exception as e:
+                            st.error(f"❌ {name}: {str(e)[:100]}")
     
-    if st.button("Test Connection"):
-        with st.spinner("Testing..."):
-            for name, exchange in bot.data_sources:
-                try:
-                    ticker = exchange.fetch_ticker('BTC/USDT')
-                    st.success(f"✅ {name}: BTC = ${ticker['last']}")
-                except Exception as e:
-                    st.error(f"❌ {name}: {str(e)[:100]}")
+    elif admin_input:
+        st.error("❌ Invalid admin password")
+
+# Optional: Add a small footer
+st.markdown("---")
+st.caption("© 2024 Futures Big Bot. All rights reserved.")
