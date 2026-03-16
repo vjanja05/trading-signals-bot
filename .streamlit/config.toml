@@ -1,21 +1,22 @@
 # .streamlit/config.toml
-
 [theme]
-# Optional: Set your theme colors
 primaryColor = "#F3BA2F"
 backgroundColor = "#0E1117"
 secondaryBackgroundColor = "#262730"
 textColor = "#FAFAFA"
 font = "sans serif"
 
+[browser]
+gatherUsageStats = false
+
 [client]
-# Set toolbar to minimal mode
 toolbarMode = "minimal"
+showSidebarNavigation = false
+
+[server]
+enableCORS = false
+enableXsrfProtection = false
 
 [ui]
-# Hide the top bar completely
 hideTopBar = true
-
-[browser]
-# Prevent browser from opening automatically
-gatherUsageStats = false
+hideSidebarNavigation = true
