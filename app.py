@@ -867,7 +867,7 @@ with content_container:
         
         # Coin selection dropdown (single selection)
         available_coins = [
-            "BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "QNT/USDT", "PIXEL/USDT", "KERNEL/USDT", "TAO/USDT", "PAXG/USDT", "PEPE/USDT", "ADA/USDT", "ALPINE", "FET/USDT",
+            "BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "QNT/USDT", "PIXEL/USDT", "KERNEL/USDT", "TAO/USDT", "PAXG/USDT", "PEPE/USDT", "ADA/USDT", "ALPINE/USDT", "FET/USDT",
             "ADA/USDT", "XRP/USDT", "DOGE/USDT", "DOT/USDT", "ACX/USDT", "STO/USDT", "REZ/USDT", "SUN/USDT", "FUN/USDT", "TRX/USDT", "WCT/USDT", "SLP/USDT", "TOWNS/USDT", "DCR/USDT", "BMT/USDT",
             "LINK/USDT", "AVAX/USDT", "DEXE/USDT", "SAHARA/USDT", "DEGO/USDT", "BARD/USDT", "FORTH/USDT", "A2Z/USDT", "CHR/USDT", "SUI/USDT", "FRAX/USDT", "VANRY/USDT", "FLUX/USDT", "PUMP/USDT", "XPL/USDT"
         ]
