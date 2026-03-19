@@ -731,7 +731,7 @@ if not st.session_state.access_granted and col_left:
         with col2:
             # Direct contact button (backup)
             st.markdown("""
-            <a href="https://t.me/vubajanja" target="_blank">
+            <a href="https://t.me/forexbigadmin" target="_blank">
                 <button style="background-color: #0088cc; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px;">
                     📱 Contact Admin Directly
                 </button>
@@ -829,7 +829,7 @@ if not st.session_state.access_granted and col_right:
         
         # Direct contact button (backup)
         st.markdown("""
-        <a href="https://t.me/vubajanja" target="_blank">
+        <a href="https://t.me/forexbigadmin" target="_blank">
             <button style="background-color: #0088cc; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px;">
                 📱 Contact Admin Directly
             </button>
