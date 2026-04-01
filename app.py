@@ -77,8 +77,15 @@ class PasswordManager:
 # ===== TRADING BOT CLASS =====
 class TradingSignalBot:
     def __init__(self):
-        self.exchange = ccxt.binance({'enableRateLimit': True, 'options': {'defaultType': 'future'}})
-    
+    self.exchange = ccxt.binance({
+        'enableRateLimit': True,
+        'options': {'defaultType': 'future'},
+        'urls': {
+            'api': {
+                'public': 'https://data-api.binance.vision/api/v3'
+            }
+        }
+    })
     def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
         try:
             ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
