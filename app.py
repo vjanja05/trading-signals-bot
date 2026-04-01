@@ -74,63 +74,107 @@ class PasswordManager:
                 return False, "Password already used"
         return False, "Invalid password"
 
-# ===== TRADING BOT CLASS - NO BINANCE =====
 class TradingSignalBot:
-    def __init__(self):
-        # Use Bybit as primary (works globally)
-        self.exchange = None
-        self._init_exchange()
+    """Trading signal bot with multiple data source fallbacks"""
     
-    def _init_exchange(self):
-        """Initialize Bybit exchange only"""
+    def __init__(self):
+        self.data_sources = []
+        self.current_source = 0
+        self._init_data_sources()
+    
+    def _init_data_sources(self):
+        """Initialize multiple data source options, skipping problematic exchanges"""
+        self.data_sources = []
+        
+        # Option 1: Bybit (usually works globally)
         try:
-            self.exchange = ccxt.bybit({
+            bybit = ccxt.bybit({
                 'enableRateLimit': True,
-                'options': {
-                    'defaultType': 'linear',  # USDT perpetual futures
-                }
+                'options': {'defaultType': 'spot'}
             })
-            # Test connection
-            self.exchange.load_markets()
-            print("✅ Bybit connected successfully")
+            bybit.load_markets()
+            self.data_sources.append(('bybit', bybit))
         except Exception as e:
-            print(f"❌ Bybit failed: {e}")
-            self.exchange = None
+            pass
+        
+        # Option 2: Kraken
+        try:
+            kraken = ccxt.kraken({'enableRateLimit': True})
+            kraken.load_markets()
+            self.data_sources.append(('kraken', kraken))
+        except:
+            pass
+        
+        # Option 3: KuCoin
+        try:
+            kucoin = ccxt.kucoin({'enableRateLimit': True})
+            kucoin.load_markets()
+            self.data_sources.append(('kucoin', kucoin))
+        except:
+            pass
+        
+        # Option 4: OKX
+        try:
+            okx = ccxt.okx({
+                'enableRateLimit': True,
+                'options': {'defaultType': 'spot'}
+            })
+            okx.load_markets()
+            self.data_sources.append(('okx', okx))
+        except:
+            pass
+    
+    def _format_symbol(self, symbol, source_name):
+        """Format symbol based on exchange requirements"""
+        try:
+            base, quote = symbol.split('/')
+            
+            if source_name == 'bybit':
+                return f"{base}{quote}"
+            elif source_name == 'kraken':
+                if base == 'BTC':
+                    base = 'XBT'
+                return f"{base}/{quote}"
+            elif source_name in ['kucoin', 'okx']:
+                return f"{base}-{quote}"
+            else:
+                return symbol
+        except:
+            return symbol
     
     def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
-        """Fetch data from Bybit"""
-        if not self.exchange:
-            st.error("Exchange not initialized. Please refresh the page.")
+        """Try multiple data sources until one works"""
+        
+        if not self.data_sources:
+            st.error("No data sources available.")
             return None
         
-        try:
-            # Bybit uses BTCUSDT format (no slash)
-            formatted_symbol = symbol.replace('/', '')
-            
-            # Map timeframes
-            timeframe_map = {
-                '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m',
-                '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w'
-            }
-            tf = timeframe_map.get(timeframe, timeframe)
-            
-            # Fetch OHLCV data
-            ohlcv = self.exchange.fetch_ohlcv(formatted_symbol, tf, limit=limit)
-            
-            if ohlcv and len(ohlcv) > 0:
-                df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-                df.set_index('timestamp', inplace=True)
+        timeframe_map = {
+            '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m',
+            '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w'
+        }
+        
+        for source_name, exchange in self.data_sources:
+            try:
+                formatted_symbol = self._format_symbol(symbol, source_name)
+                tf = timeframe_map.get(timeframe, timeframe)
                 
-                st.caption(f"📡 Data source: Bybit")
-                return df
-            else:
-                st.error("No data received from Bybit")
-                return None
+                ohlcv = exchange.fetch_ohlcv(formatted_symbol, tf, limit=limit)
                 
-        except Exception as e:
-            st.error(f"Bybit error: {str(e)[:100]}")
-            return None
+                if ohlcv and len(ohlcv) > 0:
+                    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                    df.set_index('timestamp', inplace=True)
+                    
+                    st.session_state['data_source'] = source_name
+                    st.caption(f"📡 Data from: {source_name}")
+                    return df
+                    
+            except Exception as e:
+                continue
+        
+        st.error("⚠️ Could not fetch market data. Please try again.")
+        return None
     
     def calculate_indicators(self, df):
         """Calculate technical indicators"""
@@ -155,7 +199,7 @@ class TradingSignalBot:
             df['volume_sma'] = df['volume'].rolling(window=20).mean()
             
         except Exception as e:
-            pass
+            st.warning(f"Error calculating indicators: {e}")
         
         return df
     
@@ -166,6 +210,7 @@ class TradingSignalBot:
         
         try:
             latest = df.iloc[-1]
+            
             bullish_score = 0
             bearish_score = 0
             reasons = []
@@ -193,24 +238,6 @@ class TradingSignalBot:
                 else:
                     bearish_score += 1
                     reasons.append(f"📊 Bearish RSI: {latest['rsi']:.1f}")
-            
-            # MACD
-            if not pd.isna(latest.get('macd', np.nan)) and not pd.isna(latest.get('macd_signal', np.nan)):
-                if latest['macd'] > latest['macd_signal']:
-                    bullish_score += 2
-                    reasons.append("🟢 MACD bullish")
-                else:
-                    bearish_score += 2
-                    reasons.append("🔴 MACD bearish")
-            
-            # Bollinger Bands
-            if not pd.isna(latest.get('bb_lower', np.nan)) and not pd.isna(latest.get('bb_upper', np.nan)):
-                if latest['close'] < latest['bb_lower']:
-                    bullish_score += 3
-                    reasons.append("📉 Price below lower BB")
-                elif latest['close'] > latest['bb_upper']:
-                    bearish_score += 3
-                    reasons.append("📈 Price above upper BB")
             
             # Determine signal
             total_score = bullish_score - bearish_score
@@ -264,7 +291,7 @@ class TradingSignalBot:
                 'risk_reward_ratio': rr_ratio,
                 'reasons': reasons,
                 'rsi': latest.get('rsi', 50),
-                'volume': latest.get('volume', 0),
+                'volume': latest['volume'],
                 'timestamp': datetime.now(),
                 'volatility': f"{volatility:.2f}%"
             }
