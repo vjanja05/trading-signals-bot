@@ -21,6 +21,27 @@ from pathlib import Path
 # Load environment variables
 load_dotenv()
 
+# Add a test button in your sidebar
+if st.sidebar.button("📱 Test Telegram"):
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    
+    try:
+        # Send a simple message
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        data = {
+            'chat_id': chat_id,
+            'text': "✅ Your trading bot is connected! Payment proofs will arrive here."
+        }
+        response = requests.post(url, data=data)
+        
+        if response.status_code == 200:
+            st.success("✅ Test message sent! Check your Telegram.")
+        else:
+            st.error(f"Error: {response.json()}")
+    except Exception as e:
+        st.error(f"Error: {e}")
+
 # ===== TELEGRAM IMAGE SENDER FUNCTION - DEFINED FIRST =====
 def send_telegram_photo(photo_path, caption=""):
     """Send photo to admin Telegram"""
