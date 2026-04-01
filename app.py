@@ -18,6 +18,15 @@ import secrets
 import requests
 from pathlib import Path
 
+is_mobile = st.query_params.get("mobile", False)
+
+# Page config with mobile settings
+st.set_page_config(
+    page_title="Futures Big Bot",
+    page_icon="favicon.png",
+    layout="wide",
+    initial_sidebar_state="collapsed"
+)
 # Load environment variables
 load_dotenv()
 
