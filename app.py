@@ -942,41 +942,7 @@ with content_container:
             if auto_refresh:
                 time.sleep(30)
                 st.rerun()
-        
-        else:
-            st.info("👈 Select a coin and click 'Search' to generate signals")
-    
-    else:
-        # FREE USERS - Show preview (with payment stuff on left)
-        st.title("🤖 Premium Trading Signals")
-        
-        col1, col2 = st.columns([2, 1])
-        
-        with col1:
-            st.markdown("""
-            ### 🚀 Get AI-Powered Trading Signals
-            
-            **✨ What you get:**
-            - 📊 Real-time signals for major cryptocurrencies
-            - 🎯 Entry, Stop Loss, and Take Profit levels
-            - 📈 Multiple timeframes (15m, 1h, 4h, 1d)
-            - 🔍 Detailed AI analysis with reasoning
-            - 💰 Risk/Reward ratios for each trade
-            
-            **💎 Price: 25 USDT (BEP20) for 30 days access**
-            """)
-        
-        with col2:
-            st.markdown(f"""
-            <div class="payment-box">
-                <h2>💰 Price</h2>
-                <h1>25 USDT</h1>
-                <p>BEP20 Network</p>
-                <hr>
-                <p><strong>30 Days Access</strong></p>
-            </div>
-            """, unsafe_allow_html=True)
-        
+
         # Sample preview
         st.markdown("---")
         st.subheader("📊 Sample Signal Preview")
