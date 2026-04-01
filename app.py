@@ -58,65 +58,6 @@ def send_telegram_photo(photo_data, caption=""):
             
     except Exception as e:
         return False, f"Error: {str(e)}"
-# ===== PAYMENT PROOF SECTION =====
-if not st.session_state.access_granted and col_right:
-    with col_right:
-        st.markdown("### 📤 Submit Payment Proof")
-        
-        # File uploader
-        uploaded_file = st.file_uploader(
-            "Upload payment screenshot", 
-            type=['png', 'jpg', 'jpeg'],
-            key="payment_screenshot"
-        )
-        
-        # Transaction ID (optional)
-        tx_id = st.text_input(
-            "Transaction ID (optional)", 
-            placeholder="Paste your transaction ID here",
-            key="tx_id_field"
-        )
-        
-        # Submit button
-        if st.button("📨 Send Payment Proof", use_container_width=True, type="primary"):
-            if uploaded_file is not None:
-                with st.spinner("Sending to admin..."):
-                    try:
-                        # Prepare caption
-                        caption = f"""
-🔔 NEW PAYMENT PROOF
-
-💰 Amount: 25 USDT (BEP20)
-⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
-🔑 TXID: {tx_id if tx_id else 'Not provided'}
-
-✅ Action: Verify payment and send password
-"""
-                        
-                        # Send photo directly from memory
-                        photo_bytes = uploaded_file.getvalue()
-                        success, message = send_telegram_photo(photo_bytes, caption)
-                        
-                        if success:
-                            st.success("✅ Payment proof sent! Password within 5 minutes.")
-                            st.balloons()
-                        else:
-                            st.error(f"❌ Failed: {message}")
-                            st.warning("Contact admin directly: @forexbigadmin")
-                            
-                    except Exception as e:
-                        st.error(f"Error: {str(e)}")
-            else:
-                st.warning("Please upload a screenshot")
-        
-        # Direct contact button
-        st.markdown("""
-        <a href="https://t.me/forexbigadmin" target="_blank">
-            <button style="background-color: #0088cc; color: white; padding: 12px; border: none; border-radius: 8px; width: 100%; cursor: pointer;">
-                📱 Contact Admin Directly
-            </button>
-        </a>
-        """, unsafe_allow_html=True)
 # ===== PAYMENT CONFIGURATION =====
 YOUR_WALLET = os.getenv("YOUR_WALLET", "0x87ea9fc331bbe75fdae07f291046920b878e1367")  # Your BEP20 wallet
 ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 2592000))  # 30 days in seconds
