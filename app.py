@@ -55,6 +55,21 @@ if st.sidebar.button("🔧 Test Telegram Connection"):
             
     except Exception as e:
         st.error(f"Error: {e}")
+# Add this test
+if st.sidebar.button("Test Telegram"):
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")  # Should be a number like 579821226
+    
+    st.write(f"Chat ID: {chat_id}")
+    
+    url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+    data = {'chat_id': chat_id, 'text': "✅ Test message!"}
+    response = requests.post(url, data=data)
+    
+    if response.status_code == 200:
+        st.success("✅ Message sent! Check your Telegram.")
+    else:
+        st.error(f"Error: {response.json()}")
 
 # ===== TELEGRAM IMAGE SENDER FUNCTION - DEFINED FIRST =====
 def send_telegram_photo(photo_path, caption=""):
