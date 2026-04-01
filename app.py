@@ -29,7 +29,35 @@ st.set_page_config(
 )
 # Load environment variables
 load_dotenv()
-
+# ===== TELEGRAM IMAGE SENDER FUNCTION =====
+def send_telegram_photo(photo_data, caption=""):
+    """Send photo to YOUR personal Telegram inbox"""
+    try:
+        bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+        your_chat_id = os.getenv("TELEGRAM_CHAT_ID")  # YOUR personal numeric ID
+        
+        if not bot_token or not your_chat_id:
+            return False, "Telegram not configured"
+        
+        url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+        
+        # Send photo from memory
+        files = {'photo': ('payment_proof.png', photo_data, 'image/png')}
+        data = {
+            'chat_id': your_chat_id,  # This sends to YOUR Telegram inbox
+            'caption': caption,
+            'parse_mode': 'HTML'
+        }
+        
+        response = requests.post(url, files=files, data=data, timeout=30)
+        
+        if response.status_code == 200:
+            return True, "Sent to your Telegram!"
+        else:
+            return False, f"Error: {response.status_code}"
+            
+    except Exception as e:
+        return False, f"Error: {str(e)}"
 # ===== PAYMENT PROOF SECTION =====
 if not st.session_state.access_granted and col_right:
     with col_right:
