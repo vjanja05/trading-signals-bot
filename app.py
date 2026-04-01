@@ -682,16 +682,6 @@ if not st.session_state.access_granted and col_right:
             else:
                 st.warning("Please upload a screenshot of your payment")
         
-        # Direct contact button (backup)
-        st.markdown("""
-        <a href="https://t.me/forexbigadmin" target="_blank">
-            <button style="background-color: #0088cc; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px;">
-                📱 Contact Admin Directly
-            </button>
-        </a>
-        """, unsafe_allow_html=True)
-
-
 # ===== PASSWORD-BASED ACCESS SYSTEM =====
 # Check access expiry
 if st.session_state.access_expiry:
