@@ -74,120 +74,63 @@ class PasswordManager:
                 return False, "Password already used"
         return False, "Invalid password"
 
-# ===== TRADING BOT CLASS =====
+# ===== TRADING BOT CLASS - NO BINANCE =====
 class TradingSignalBot:
     def __init__(self):
-        self.exchanges = []
-        self._init_exchanges()
+        # Use Bybit as primary (works globally)
+        self.exchange = None
+        self._init_exchange()
     
-    def _init_exchanges(self):
-        """Initialize multiple exchange sources that work globally"""
-        
-        # Try Bybit first (most reliable globally)
+    def _init_exchange(self):
+        """Initialize Bybit exchange only"""
         try:
-            bybit = ccxt.bybit({
+            self.exchange = ccxt.bybit({
                 'enableRateLimit': True,
-                'options': {'defaultType': 'linear'}  # linear futures
+                'options': {
+                    'defaultType': 'linear',  # USDT perpetual futures
+                }
             })
-            self.exchanges.append(('bybit', bybit))
-        except:
-            pass
-        
-        # Try OKX
-        try:
-            okx = ccxt.okx({
-                'enableRateLimit': True,
-                'options': {'defaultType': 'swap'}
-            })
-            self.exchanges.append(('okx', okx))
-        except:
-            pass
-        
-        # Try Kraken Futures
-        try:
-            kraken = ccxt.krakenfutures({
-                'enableRateLimit': True,
-            })
-            self.exchanges.append(('kraken', kraken))
-        except:
-            pass
-        
-        # Try KuCoin Futures
-        try:
-            kucoin = ccxt.kucoinfutures({
-                'enableRateLimit': True,
-            })
-            self.exchanges.append(('kucoin', kucoin))
-        except:
-            pass
-        
-        # Try Gate.io as backup
-        try:
-            gate = ccxt.gate({
-                'enableRateLimit': True,
-                'options': {'defaultType': 'swap'}
-            })
-            self.exchanges.append(('gate', gate))
-        except:
-            pass
-    
-    def _format_symbol(self, symbol, exchange_name):
-        """Format symbol based on exchange requirements"""
-        try:
-            base, quote = symbol.split('/')
-            
-            if exchange_name in ['bybit', 'okx', 'gate']:
-                # Bybit, OKX, Gate use BTCUSDT format
-                return f"{base}{quote}"
-            elif exchange_name == 'kraken':
-                # Kraken futures uses PI_ format for perpetuals
-                return f"PI_{base}{quote}"
-            elif exchange_name == 'kucoin':
-                # KuCoin uses XBTUSDTM for futures
-                if base == 'BTC':
-                    return f"XBT{quote}M"
-                return f"{base}{quote}M"
-            else:
-                return f"{base}-{quote}"
-        except:
-            return symbol
+            # Test connection
+            self.exchange.load_markets()
+            print("✅ Bybit connected successfully")
+        except Exception as e:
+            print(f"❌ Bybit failed: {e}")
+            self.exchange = None
     
     def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
-        """Try multiple data sources until one works"""
-        
-        if not self.exchanges:
-            st.error("No data sources available. Please try again later.")
+        """Fetch data from Bybit"""
+        if not self.exchange:
+            st.error("Exchange not initialized. Please refresh the page.")
             return None
         
-        # Timeframe mapping for different exchanges
-        timeframe_map = {
-            '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m',
-            '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w'
-        }
-        tf = timeframe_map.get(timeframe, timeframe)
-        
-        # Try each exchange
-        for name, exchange in self.exchanges:
-            try:
-                formatted_symbol = self._format_symbol(symbol, name)
-                ohlcv = exchange.fetch_ohlcv(formatted_symbol, tf, limit=limit)
+        try:
+            # Bybit uses BTCUSDT format (no slash)
+            formatted_symbol = symbol.replace('/', '')
+            
+            # Map timeframes
+            timeframe_map = {
+                '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m',
+                '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w'
+            }
+            tf = timeframe_map.get(timeframe, timeframe)
+            
+            # Fetch OHLCV data
+            ohlcv = self.exchange.fetch_ohlcv(formatted_symbol, tf, limit=limit)
+            
+            if ohlcv and len(ohlcv) > 0:
+                df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                df.set_index('timestamp', inplace=True)
                 
-                if ohlcv and len(ohlcv) > 0:
-                    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-                    df.set_index('timestamp', inplace=True)
-                    
-                    # Show which source is working (good for debugging)
-                    st.caption(f"📡 Data source: {name}")
-                    return df
-                    
-            except Exception as e:
-                # Try next exchange
-                continue
-        
-        # If all sources fail
-        st.error("⚠️ Could not fetch market data. Please try again later.")
-        return None
+                st.caption(f"📡 Data source: Bybit")
+                return df
+            else:
+                st.error("No data received from Bybit")
+                return None
+                
+        except Exception as e:
+            st.error(f"Bybit error: {str(e)[:100]}")
+            return None
     
     def calculate_indicators(self, df):
         """Calculate technical indicators"""
