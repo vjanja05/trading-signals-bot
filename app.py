@@ -58,6 +58,93 @@ def send_telegram_photo(photo_data, caption=""):
             
     except Exception as e:
         return False, f"Error: {str(e)}"
+
+# ===== ENHANCED PASSWORD REQUEST SYSTEM WITH TELEGRAM =====
+with col2:
+    st.markdown("### 📤 Submit Payment Proof")
+    
+    # File uploader for screenshot
+    uploaded_file = st.file_uploader(
+        "Upload payment screenshot", 
+        type=['png', 'jpg', 'jpeg'],
+        help="Take a screenshot of your successful 25 USDT payment and upload it here"
+    )
+    
+    # Optional: Add transaction ID for easier verification
+    tx_id = st.text_input(
+        "Transaction ID (optional)", 
+        placeholder="Paste your transaction ID here if available",
+        help="This helps us verify faster"
+    )
+    
+    # Optional: User contact info
+    col_a, col_b = st.columns(2)
+    with col_a:
+        user_telegram = st.text_input("Your Telegram (optional)", placeholder="@username", 
+                                      help="So we can send you the password faster")
+    with col_b:
+        user_email = st.text_input("Your Email (optional)", placeholder="email@example.com")
+    
+    # Submit button
+    if st.button("📨 Submit Payment Proof", use_container_width=True, type="primary"):
+        if uploaded_file is not None:
+            with st.spinner("Sending payment proof to admin..."):
+                try:
+                    # Generate unique filename
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    random_id = secrets.token_hex(4)
+                    filename = f"{PAYMENT_PROOFS_DIR}/payment_{timestamp}_{random_id}.png"
+                    
+                    # Save the file locally
+                    with open(filename, "wb") as f:
+                        f.write(uploaded_file.getbuffer())
+                    
+                    # Prepare caption for Telegram
+                    caption = f"🔔 *NEW PAYMENT PROOF RECEIVED*\n\n"
+                    caption += f"⏰ *Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+                    caption += f"💰 *Amount:* 25 USDT (BEP20)\n"
+                    caption += f"🔑 *TXID:* {tx_id or 'Not provided'}\n"
+                    caption += f"📱 *Telegram:* {user_telegram or 'Not provided'}\n"
+                    caption += f"📧 *Email:* {user_email or 'Not provided'}\n"
+                    caption += f"🆔 *File:* {filename}\n\n"
+                    caption += f"✅ *Action:* Reply with password or use admin panel"
+                    
+                    # Send to Telegram
+                    success, message = send_telegram_photo(filename, caption)
+                    
+                    if success:
+                        st.success("✅ Payment proof sent to admin! You'll receive your password soon.")
+                        
+                        # Show next steps
+                        st.info(f"""
+                        **📱 Next steps:**
+                        1. ✅ Admin received your payment proof
+                        2. 🔐 Password will be sent within 5 minutes
+                        3. 📨 Check your Telegram {user_telegram or 'messages'}
+                        4. 🔓 Enter password above to unlock access
+                        
+                        **⏱️ Expected response time: 2-5 minutes**
+                        """)
+                        
+                        st.balloons()
+                    else:
+                        st.error(f"❌ Failed to send to Telegram: {message}")
+                        st.warning("Please contact admin directly via the button below")
+                        
+                        # Save metadata for manual processing
+                        metadata_file = f"{PAYMENT_PROOFS_DIR}/payment_{timestamp}_{random_id}.txt"
+                        with open(metadata_file, "w") as f:
+                            f.write(f"Submission Time: {datetime.now()}\n")
+                            f.write(f"Transaction ID: {tx_id or 'Not provided'}\n")
+                            f.write(f"Telegram: {user_telegram or 'Not provided'}\n")
+                            f.write(f"Email: {user_email or 'Not provided'}\n")
+                            f.write(f"Status: Pending Manual Verification\n")
+                        
+                except Exception as e:
+                    st.error(f"Error processing your request: {str(e)}")
+        else:
+            st.warning("Please upload a screenshot of your payment")
+
 # ===== PAYMENT CONFIGURATION =====
 YOUR_WALLET = os.getenv("YOUR_WALLET", "0x87ea9fc331bbe75fdae07f291046920b878e1367")  # Your BEP20 wallet
 ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 2592000))  # 30 days in seconds
