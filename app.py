@@ -81,95 +81,153 @@ class TradingSignalBot:
         self._init_exchanges()
     
     def _init_exchanges(self):
+        """Initialize multiple exchange sources that work globally"""
+        
         # Try Bybit first (most reliable globally)
         try:
-            bybit = ccxt.bybit({'enableRateLimit': True, 'options': {'defaultType': 'future'}})
+            bybit = ccxt.bybit({
+                'enableRateLimit': True,
+                'options': {'defaultType': 'linear'}  # linear futures
+            })
             self.exchanges.append(('bybit', bybit))
         except:
             pass
         
         # Try OKX
         try:
-            okx = ccxt.okx({'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
+            okx = ccxt.okx({
+                'enableRateLimit': True,
+                'options': {'defaultType': 'swap'}
+            })
             self.exchanges.append(('okx', okx))
         except:
             pass
         
-        # Try Kraken
+        # Try Kraken Futures
         try:
-            kraken = ccxt.krakenfutures({'enableRateLimit': True})
+            kraken = ccxt.krakenfutures({
+                'enableRateLimit': True,
+            })
             self.exchanges.append(('kraken', kraken))
         except:
             pass
         
-        # Try KuCoin
+        # Try KuCoin Futures
         try:
-            kucoin = ccxt.kucoinfutures({'enableRateLimit': True})
+            kucoin = ccxt.kucoinfutures({
+                'enableRateLimit': True,
+            })
             self.exchanges.append(('kucoin', kucoin))
         except:
             pass
+        
+        # Try Gate.io as backup
+        try:
+            gate = ccxt.gate({
+                'enableRateLimit': True,
+                'options': {'defaultType': 'swap'}
+            })
+            self.exchanges.append(('gate', gate))
+        except:
+            pass
+    
+    def _format_symbol(self, symbol, exchange_name):
+        """Format symbol based on exchange requirements"""
+        try:
+            base, quote = symbol.split('/')
+            
+            if exchange_name in ['bybit', 'okx', 'gate']:
+                # Bybit, OKX, Gate use BTCUSDT format
+                return f"{base}{quote}"
+            elif exchange_name == 'kraken':
+                # Kraken futures uses PI_ format for perpetuals
+                return f"PI_{base}{quote}"
+            elif exchange_name == 'kucoin':
+                # KuCoin uses XBTUSDTM for futures
+                if base == 'BTC':
+                    return f"XBT{quote}M"
+                return f"{base}{quote}M"
+            else:
+                return f"{base}-{quote}"
+        except:
+            return symbol
     
     def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
+        """Try multiple data sources until one works"""
+        
+        if not self.exchanges:
+            st.error("No data sources available. Please try again later.")
+            return None
+        
+        # Timeframe mapping for different exchanges
+        timeframe_map = {
+            '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m',
+            '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w'
+        }
+        tf = timeframe_map.get(timeframe, timeframe)
+        
+        # Try each exchange
         for name, exchange in self.exchanges:
             try:
                 formatted_symbol = self._format_symbol(symbol, name)
-                ohlcv = exchange.fetch_ohlcv(formatted_symbol, timeframe, limit=limit)
-                if ohlcv:
+                ohlcv = exchange.fetch_ohlcv(formatted_symbol, tf, limit=limit)
+                
+                if ohlcv and len(ohlcv) > 0:
                     df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
                     df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
                     df.set_index('timestamp', inplace=True)
+                    
+                    # Show which source is working (good for debugging)
                     st.caption(f"📡 Data source: {name}")
                     return df
+                    
             except Exception as e:
+                # Try next exchange
                 continue
         
+        # If all sources fail
         st.error("⚠️ Could not fetch market data. Please try again later.")
         return None
     
-    def _format_symbol(self, symbol, exchange_name):
-        base, quote = symbol.split('/')
-        if exchange_name in ['bybit', 'okx']:
-            return f"{base}{quote}"
-        elif exchange_name == 'kraken':
-            return f"PI_{base}{quote}"
-        return f"{base}-{quote}"
-    def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
-        try:
-            ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
-            df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            df.set_index('timestamp', inplace=True)
-            return df
-        except Exception as e:
-            st.error(f"Error fetching data: {e}")
-            return None
-    
     def calculate_indicators(self, df):
+        """Calculate technical indicators"""
         if df is None or len(df) < 20:
             return df
+        
         try:
             df['ema_9'] = ta.trend.ema_indicator(df['close'], window=9)
             df['ema_21'] = ta.trend.ema_indicator(df['close'], window=21)
+            df['ema_50'] = ta.trend.ema_indicator(df['close'], window=50)
             df['rsi'] = ta.momentum.rsi(df['close'], window=14)
+            
             macd = ta.trend.MACD(df['close'])
             df['macd'] = macd.macd()
             df['macd_signal'] = macd.macd_signal()
+            
             bb = ta.volatility.BollingerBands(df['close'], window=20, window_dev=2)
             df['bb_upper'] = bb.bollinger_hband()
+            df['bb_middle'] = bb.bollinger_mavg()
             df['bb_lower'] = bb.bollinger_lband()
-        except:
+            
+            df['volume_sma'] = df['volume'].rolling(window=20).mean()
+            
+        except Exception as e:
             pass
+        
         return df
     
     def generate_signal(self, df):
+        """Generate trading signal based on multiple factors"""
         if df is None or len(df) < 50:
             return None
+        
         try:
             latest = df.iloc[-1]
             bullish_score = 0
             bearish_score = 0
             reasons = []
             
+            # EMA trend
             if not pd.isna(latest.get('ema_9', np.nan)) and not pd.isna(latest.get('ema_21', np.nan)):
                 if latest['ema_9'] > latest['ema_21']:
                     bullish_score += 3
@@ -178,6 +236,7 @@ class TradingSignalBot:
                     bearish_score += 3
                     reasons.append("📉 Bearish EMA trend")
             
+            # RSI
             if not pd.isna(latest.get('rsi', np.nan)):
                 if latest['rsi'] < 30:
                     bullish_score += 4
@@ -187,9 +246,30 @@ class TradingSignalBot:
                     reasons.append(f"⚠️ Overbought RSI: {latest['rsi']:.1f}")
                 elif latest['rsi'] > 50:
                     bullish_score += 1
+                    reasons.append(f"📊 Bullish RSI: {latest['rsi']:.1f}")
                 else:
                     bearish_score += 1
+                    reasons.append(f"📊 Bearish RSI: {latest['rsi']:.1f}")
             
+            # MACD
+            if not pd.isna(latest.get('macd', np.nan)) and not pd.isna(latest.get('macd_signal', np.nan)):
+                if latest['macd'] > latest['macd_signal']:
+                    bullish_score += 2
+                    reasons.append("🟢 MACD bullish")
+                else:
+                    bearish_score += 2
+                    reasons.append("🔴 MACD bearish")
+            
+            # Bollinger Bands
+            if not pd.isna(latest.get('bb_lower', np.nan)) and not pd.isna(latest.get('bb_upper', np.nan)):
+                if latest['close'] < latest['bb_lower']:
+                    bullish_score += 3
+                    reasons.append("📉 Price below lower BB")
+                elif latest['close'] > latest['bb_upper']:
+                    bearish_score += 3
+                    reasons.append("📈 Price above upper BB")
+            
+            # Determine signal
             total_score = bullish_score - bearish_score
             
             if total_score >= 3:
@@ -202,6 +282,7 @@ class TradingSignalBot:
                 signal = "NEUTRAL"
                 confidence = 50
             
+            # Calculate TP/SL
             current_price = latest['close']
             volatility = df['close'].pct_change().std() * 100
             
@@ -240,12 +321,14 @@ class TradingSignalBot:
                 'risk_reward_ratio': rr_ratio,
                 'reasons': reasons,
                 'rsi': latest.get('rsi', 50),
+                'volume': latest.get('volume', 0),
+                'timestamp': datetime.now(),
                 'volatility': f"{volatility:.2f}%"
             }
+            
         except Exception as e:
             st.error(f"Error generating signal: {e}")
             return None
-
 # Page configuration
 st.set_page_config(page_title="Futures Big Bot", page_icon="favicon.png", layout="wide")
 
