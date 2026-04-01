@@ -77,15 +77,62 @@ class PasswordManager:
 # ===== TRADING BOT CLASS =====
 class TradingSignalBot:
     def __init__(self):
-       self.exchange = ccxt.binance({
-           'enableRateLimit': True,
-          'options': {'defaultType': 'future'},
-          'urls': {
-              'api': {
-                  'public': 'https://data-api.binance.vision/api/v3'
-              }
-          }
-      })
+        self.exchanges = []
+        self._init_exchanges()
+    
+    def _init_exchanges(self):
+        # Try Bybit first (most reliable globally)
+        try:
+            bybit = ccxt.bybit({'enableRateLimit': True, 'options': {'defaultType': 'future'}})
+            self.exchanges.append(('bybit', bybit))
+        except:
+            pass
+        
+        # Try OKX
+        try:
+            okx = ccxt.okx({'enableRateLimit': True, 'options': {'defaultType': 'swap'}})
+            self.exchanges.append(('okx', okx))
+        except:
+            pass
+        
+        # Try Kraken
+        try:
+            kraken = ccxt.krakenfutures({'enableRateLimit': True})
+            self.exchanges.append(('kraken', kraken))
+        except:
+            pass
+        
+        # Try KuCoin
+        try:
+            kucoin = ccxt.kucoinfutures({'enableRateLimit': True})
+            self.exchanges.append(('kucoin', kucoin))
+        except:
+            pass
+    
+    def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
+        for name, exchange in self.exchanges:
+            try:
+                formatted_symbol = self._format_symbol(symbol, name)
+                ohlcv = exchange.fetch_ohlcv(formatted_symbol, timeframe, limit=limit)
+                if ohlcv:
+                    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+                    df.set_index('timestamp', inplace=True)
+                    st.caption(f"📡 Data source: {name}")
+                    return df
+            except Exception as e:
+                continue
+        
+        st.error("⚠️ Could not fetch market data. Please try again later.")
+        return None
+    
+    def _format_symbol(self, symbol, exchange_name):
+        base, quote = symbol.split('/')
+        if exchange_name in ['bybit', 'okx']:
+            return f"{base}{quote}"
+        elif exchange_name == 'kraken':
+            return f"PI_{base}{quote}"
+        return f"{base}-{quote}"
     def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
         try:
             ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
