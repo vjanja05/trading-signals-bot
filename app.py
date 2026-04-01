@@ -21,24 +21,38 @@ from pathlib import Path
 # Load environment variables
 load_dotenv()
 
-# Add a test button in your sidebar
-if st.sidebar.button("📱 Test Telegram"):
+# Test button in sidebar
+if st.sidebar.button("🔧 Test Telegram Connection"):
     bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     
+    st.write(f"Bot Token: {bot_token[:10]}... (hidden)")
+    st.write(f"Chat ID: {chat_id}")
+    
     try:
-        # Send a simple message
-        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
-        data = {
-            'chat_id': chat_id,
-            'text': "✅ Your trading bot is connected! Payment proofs will arrive here."
-        }
-        response = requests.post(url, data=data)
+        # First, try to get bot info
+        url = f"https://api.telegram.org/bot{bot_token}/getMe"
+        response = requests.get(url)
+        bot_info = response.json()
         
-        if response.status_code == 200:
+        if bot_info.get('ok'):
+            st.success(f"✅ Bot found: @{bot_info['result']['username']}")
+        else:
+            st.error(f"❌ Bot not found: {bot_info}")
+            
+        # Then try to send a message
+        send_url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        send_data = {
+            'chat_id': chat_id,
+            'text': "✅ Test message from your trading bot! This is working."
+        }
+        send_response = requests.post(send_url, data=send_data)
+        
+        if send_response.status_code == 200:
             st.success("✅ Test message sent! Check your Telegram.")
         else:
-            st.error(f"Error: {response.json()}")
+            st.error(f"❌ Failed: {send_response.json()}")
+            
     except Exception as e:
         st.error(f"Error: {e}")
 
