@@ -23,41 +23,130 @@ load_dotenv()
 # Add this at the beginning of your app.py (after imports)
 
 # ===== TELEGRAM IMAGE SENDER FUNCTION - DEFINED FIRST =====
-def send_telegram_photo(photo_path, caption=""):
-    """Send photo to admin Telegram"""
+
+def send_to_telegram(photo_data, caption=""):
+    """Send photo and message to your personal Telegram inbox"""
     try:
+        # Your bot token and your personal chat ID
         bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-        chat_id = os.getenv("TELEGRAM_CHAT_ID")
+        your_chat_id = os.getenv("TELEGRAM_CHAT_ID")  # YOUR personal Telegram chat ID
         
-        if not bot_token or not chat_id:
-            print("Telegram not configured - missing tokens")  # This will show in console
-            return False, "Telegram not configured. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env file"
+        if not bot_token or not your_chat_id:
+            return False, "Telegram not configured"
         
+        # Send photo
         url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
         
-        with open(photo_path, 'rb') as photo:
-            files = {'photo': photo}
-            data = {'chat_id': chat_id, 'caption': caption, 'parse_mode': 'Markdown'}
-            response = requests.post(url, files=files, data=data, timeout=30)
+        # Prepare the photo from memory
+        files = {'photo': photo_data}
+        data = {
+            'chat_id': your_chat_id,
+            'caption': caption,
+            'parse_mode': 'HTML'
+        }
+        
+        response = requests.post(url, files=files, data=data, timeout=30)
         
         if response.status_code == 200:
-            return True, "Photo sent successfully"
+            return True, "Sent to admin!"
         else:
-            return False, f"Telegram error: {response.status_code} - {response.text}"
+            return False, f"Error: {response.status_code}"
             
     except Exception as e:
-        return False, f"Error sending to Telegram: {str(e)}"
-
+        return False, f"Error: {str(e)}"
 # ===== PAYMENT CONFIGURATION =====
 YOUR_WALLET = os.getenv("YOUR_WALLET", "0x87ea9fc331bbe75fdae07f291046920b878e1367")  # Your BEP20 wallet
 ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 2592000))  # 30 days in seconds
 ACCESS_PRICE_USDT = 25  # $25 USDT
 
 # Create directory for payment proofs
-PAYMENT_PROOFS_DIR = "payment_proofs"
-os.makedirs(PAYMENT_PROOFS_DIR, exist_ok=True)
+# ===== SIMPLIFIED PAYMENT PROOF SUBMISSION =====
+with col2:
+    st.markdown("### 📤 Submit Payment Proof")
+    
+    # File uploader for screenshot
+    uploaded_file = st.file_uploader(
+        "Upload payment screenshot", 
+        type=['png', 'jpg', 'jpeg'],
+        help="Take a screenshot of your successful 25 USDT payment"
+    )
+    
+    # Optional: Add transaction ID for easier verification
+    tx_id = st.text_input(
+        "Transaction ID (optional)", 
+        placeholder="Paste your transaction ID here if available",
+        help="This helps us verify faster"
+    )
+    
+    # User contact info
+    col_a, col_b = st.columns(2)
+    with col_a:
+        user_telegram = st.text_input("Your Telegram (optional)", placeholder="@username", 
+                                      help="So we can contact you")
+    with col_b:
+        user_email = st.text_input("Your Email (optional)", placeholder="email@example.com")
+    
+    # Submit button
+    if st.button("📨 Send Payment Proof", use_container_width=True, type="primary"):
+        if uploaded_file is not None:
+            with st.spinner("Sending payment proof to admin..."):
+                try:
+                    # Prepare the message for admin
+                    caption = f"""
+🔔 <b>NEW PAYMENT PROOF</b>
 
+💰 <b>Amount:</b> 25 USDT (BEP20)
+⏰ <b>Time:</b> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+🔑 <b>TXID:</b> {tx_id or 'Not provided'}
 
+<b>User Contact:</b>
+📱 Telegram: {user_telegram or 'Not provided'}
+📧 Email: {user_email or 'Not provided'}
+
+✅ <b>Action:</b> Verify payment and send password
+"""
+                    
+                    # Send the photo directly to your Telegram
+                    # Convert uploaded file to bytes
+                    photo_bytes = uploaded_file.getvalue()
+                    
+                    # Send to your Telegram inbox
+                    success, message = send_to_telegram(photo_bytes, caption)
+                    
+                    if success:
+                        st.success("✅ Payment proof sent to admin! You'll receive your password soon.")
+                        st.balloons()
+                        
+                        st.info(f"""
+                        **📱 Next steps:**
+                        1. ✅ Admin received your payment proof
+                        2. 🔐 Password will be sent within 5 minutes
+                        3. 📨 Check your Telegram messages
+                        4. 🔓 Enter password above to unlock access
+                        
+                        **⏱️ Expected response: 2-5 minutes**
+                        """)
+                        
+                        # Clear the form (by rerunning)
+                        time.sleep(2)
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Failed to send: {message}")
+                        st.warning("Please contact admin directly on Telegram: @vubajanja")
+                        
+                except Exception as e:
+                    st.error(f"Error: {str(e)}")
+        else:
+            st.warning("Please upload a screenshot of your payment")
+    
+    # Direct contact button (backup)
+    st.markdown("""
+    <a href="https://t.me/vubajanja" target="_blank">
+        <button style="background-color: #0088cc; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px;">
+            📱 Contact Admin Directly
+        </button>
+    </a>
+    """, unsafe_allow_html=True)
 # ===== PASSWORD MANAGEMENT SYSTEM =====
 class PasswordManager:
     def __init__(self):
