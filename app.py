@@ -30,36 +30,7 @@ st.set_page_config(
 # Load environment variables
 load_dotenv()
 
-# ===== TELEGRAM IMAGE SENDER FUNCTION =====
-def send_telegram_photo(photo_data, caption=""):
-    """Send photo to admin Telegram"""
-    try:
-        bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-        chat_id = os.getenv("579821226")  # Your numeric chat ID, not @username
-        
-        if not bot_token or not chat_id:
-            return False, "Telegram not configured. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID"
-        
-        url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
-        
-        # Send photo from memory
-        files = {'photo': ('payment_proof.png', photo_data, 'image/png')}
-        data = {
-            'chat_id': chat_id,
-            'caption': caption,
-            'parse_mode': 'HTML'
-        }
-        
-        response = requests.post(url, files=files, data=data, timeout=30)
-        
-        if response.status_code == 200:
-            return True, "Photo sent successfully"
-        else:
-            return False, f"Telegram error: {response.status_code}"
-            
-    except Exception as e:
-        return False, f"Error sending to Telegram: {str(e)}"
-# ===== TELEGRAM IMAGE SENDER FUNCTION - DEFINED FIRST =====
+# ===== PAYMENT PROOF SECTION =====
 if not st.session_state.access_granted and col_right:
     with col_right:
         st.markdown("### 📤 Submit Payment Proof")
