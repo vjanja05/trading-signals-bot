@@ -35,7 +35,7 @@ def send_telegram_photo(photo_path, caption=""):
     """Send photo to admin Telegram"""
     try:
         bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-        chat_id = os.getenv("@forexbigadmin")
+        chat_id = os.getenv("579821226")
         
         if not bot_token or not chat_id:
             print("Telegram not configured - missing tokens")  # This will show in console
