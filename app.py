@@ -601,7 +601,7 @@ if not st.session_state.access_granted and col_left:
         with col2:
             # Direct contact button (backup)
             st.markdown("""
-            <a href="https://t.me/vubajanja" target="_blank">
+            <a href="https://t.me/forexbigadmin" target="_blank">
                 <button style="background-color: #0088cc; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px;">
                     📱 Contact Admin Directly
                 </button>
@@ -621,21 +621,6 @@ if not st.session_state.access_granted and col_right:
             type=['png', 'jpg', 'jpeg'],
             help="Take a screenshot of your successful 25 USDT payment and upload it here"
         )
-        
-        # Optional: Add transaction ID for easier verification
-        tx_id = st.text_input(
-            "Transaction ID (optional)", 
-            placeholder="Paste your transaction ID here if available",
-            help="This helps us verify faster"
-        )
-        
-        # Optional: User contact info
-        col_a, col_b = st.columns(2)
-        with col_a:
-            user_telegram = st.text_input("Your Telegram (optional)", placeholder="@username", 
-                                          help="So we can send you the password faster")
-        with col_b:
-            user_email = st.text_input("Your Email (optional)", placeholder="email@example.com")
         
         # Submit button
         if st.button("📨 Submit Payment Proof", use_container_width=True, type="primary"):
@@ -699,7 +684,7 @@ if not st.session_state.access_granted and col_right:
         
         # Direct contact button (backup)
         st.markdown("""
-        <a href="https://t.me/vubajanja" target="_blank">
+        <a href="https://t.me/forexbigadmin" target="_blank">
             <button style="background-color: #0088cc; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px;">
                 📱 Contact Admin Directly
             </button>
@@ -990,176 +975,6 @@ with content_container:
             'R:R': ['1:2.4', '1:1.8']
         })
         st.dataframe(preview_data, use_container_width=True)
-
-# ===== STANDALONE ADMIN PANEL - ALWAYS VISIBLE AT BOTTOM =====
-st.markdown("---")
-st.markdown("## ")
-
-# Create a separator
-st.markdown("### 🔻 System Administration")
-st.markdown("*This section is for administrators only*")
-
-# Admin authentication - completely separate from user login
-with st.expander("👑 Click to Access Admin Panel", expanded=False):
-    
-    admin_password_input = st.text_input(
-        "Enter Admin Password:", 
-        type="password", 
-        key="global_admin_auth",
-        placeholder="Enter admin password"
-    )
-    
-    # Check admin password (change this to your actual admin password)
-    MASTER_ADMIN_PASSWORD = "ADMIN123"  # <-- CHANGE THIS TO YOUR PASSWORD
-    
-    if admin_password_input == MASTER_ADMIN_PASSWORD:
-        st.success("✅ Admin access granted")
-        
-        # Create tabs for different admin functions
-        admin_tab1, admin_tab2, admin_tab3, admin_tab4 = st.tabs([
-            "📂 Payment Proofs", 
-            "🔑 Generate Password", 
-            "✅ Grant Access",
-            "📊 System Status"
-        ])
-        
-        # TAB 1: Payment Proofs
-        with admin_tab1:
-            st.subheader("📂 Payment Proofs")
-            
-            # Check if directory exists
-            if os.path.exists(PAYMENT_PROOFS_DIR):
-                files = os.listdir(PAYMENT_PROOFS_DIR)
-                proof_files = [f for f in files if f.endswith(('.png', '.jpg', '.jpeg'))]
-                
-                if proof_files:
-                    st.write(f"**Total proofs:** {len(proof_files)}")
-                    
-                    # Show files in a table
-                    proof_data = []
-                    for file in sorted(proof_files, reverse=True)[:20]:
-                        file_path = os.path.join(PAYMENT_PROOFS_DIR, file)
-                        file_size = os.path.getsize(file_path) / 1024  # KB
-                        modified = datetime.fromtimestamp(os.path.getmtime(file_path))
-                        
-                        # Check for metadata
-                        meta_file = file.replace('.png', '.txt').replace('.jpg', '.txt').replace('.jpeg', '.txt')
-                        has_meta = os.path.exists(os.path.join(PAYMENT_PROOFS_DIR, meta_file))
-                        
-                        proof_data.append({
-                            "File": file,
-                            "Size": f"{file_size:.1f} KB",
-                            "Modified": modified.strftime("%Y-%m-%d %H:%M"),
-                            "Meta": "✅" if has_meta else "❌"
-                        })
-                    
-                    st.dataframe(pd.DataFrame(proof_data), use_container_width=True)
-                    
-                    # View selected file
-                    selected_file = st.selectbox("Select file to view:", proof_files)
-                    if selected_file:
-                        col1, col2 = st.columns(2)
-                        with col1:
-                            image_path = os.path.join(PAYMENT_PROOFS_DIR, selected_file)
-                            st.image(image_path, caption=selected_file, width=300)
-                        with col2:
-                            # Show metadata if exists
-                            meta_file = selected_file.replace('.png', '.txt').replace('.jpg', '.txt').replace('.jpeg', '.txt')
-                            meta_path = os.path.join(PAYMENT_PROOFS_DIR, meta_file)
-                            if os.path.exists(meta_path):
-                                with open(meta_path, 'r') as f:
-                                    st.text(f.read())
-                else:
-                    st.info("No payment proofs found")
-            else:
-                st.warning("Payment proofs directory not found")
-        
-        # TAB 2: Generate Password
-        with admin_tab2:
-            st.subheader("🔑 Generate Access Password")
-            
-            col1, col2 = st.columns(2)
-            with col1:
-                days = st.number_input("Access duration (days):", min_value=1, max_value=365, value=30)
-            with col2:
-                user_info = st.text_input("User info (optional):", placeholder="Telegram/Email")
-            
-            if st.button("🎲 Generate New Password", use_container_width=True):
-                new_password = st.session_state.password_manager.generate_password(days)
-                
-                st.success("✅ Password generated successfully!")
-                
-                # Display password prominently
-                st.markdown(f"""
-                <div style="background-color: #d4edda; padding: 20px; border-radius: 10px; text-align: center; margin: 20px 0;">
-                    <h3 style="color: #155724; margin: 0;">🔐 {new_password}</h3>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Show details
-                expiry = datetime.now() + timedelta(days=days)
-                st.info(f"📅 Expires: {expiry.strftime('%Y-%m-%d %H:%M')}")
-                if user_info:
-                    st.caption(f"👤 For: {user_info}")
-        
-        # TAB 3: Grant Access
-        with admin_tab3:
-            st.subheader("✅ Grant Manual Access")
-            
-            grant_days = st.number_input("Grant access for (days):", min_value=1, max_value=365, value=30, key="grant_days")
-            
-            if st.button("🔓 Grant Access to Current Session", use_container_width=True, type="primary"):
-                st.session_state.access_granted = True
-                st.session_state.access_expiry = datetime.now() + timedelta(days=grant_days)
-                st.success(f"✅ Access granted for {grant_days} days!")
-                st.info(f"Expires: {st.session_state.access_expiry.strftime('%Y-%m-%d %H:%M')}")
-        
-        # TAB 4: System Status
-        with admin_tab4:
-            st.subheader("📊 System Status")
-            
-            # Session state info
-            with st.expander("Session State"):
-                state_info = {}
-                for key, value in st.session_state.items():
-                    if key != 'password_manager':  # Skip large objects
-                        state_info[key] = str(value)
-                st.json(state_info)
-            
-            # Password manager stats
-            with st.expander("Password Manager"):
-                pm = st.session_state.password_manager
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Total Passwords", len(pm.valid_passwords))
-                with col2:
-                    used = sum(1 for p in pm.valid_passwords.values() if p['used'])
-                    st.metric("Used", used)
-                with col3:
-                    active = len([p for p in pm.valid_passwords.values() if not p['used']])
-                    st.metric("Available", active)
-            
-            # Data sources
-            with st.expander("Data Sources"):
-                if hasattr(bot, 'data_sources') and bot.data_sources:
-                    for name, _ in bot.data_sources:
-                        st.write(f"✅ {name}")
-                else:
-                    st.warning("No data sources loaded")
-            
-            # Test connections
-            if st.button("Test Data Connections"):
-                with st.spinner("Testing connections..."):
-                    if hasattr(bot, 'data_sources'):
-                        for name, exchange in bot.data_sources:
-                            try:
-                                ticker = exchange.fetch_ticker('BTC/USDT')
-                                st.success(f"✅ {name}: BTC = ${ticker['last']:,.2f}")
-                            except Exception as e:
-                                st.error(f"❌ {name}: {str(e)[:50]}")
-    
-    elif admin_password_input:
-        st.error("❌ Invalid admin password")
 
 # Final footer
 st.markdown("---")
