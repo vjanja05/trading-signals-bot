@@ -18,137 +18,43 @@ import secrets
 import requests
 from pathlib import Path
 
-is_mobile = st.query_params.get("mobile", False)
-
-# Page config with mobile settings
-st.set_page_config(
-    page_title="Futures Big Bot",
-    page_icon="favicon.png",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
 # Load environment variables
 load_dotenv()
-# ===== TELEGRAM IMAGE SENDER FUNCTION =====
-def send_telegram_photo(photo_data, caption=""):
-    """Send photo to YOUR personal Telegram inbox"""
+
+# ===== TELEGRAM IMAGE SENDER FUNCTION - DEFINED FIRST =====
+def send_telegram_photo(photo_path, caption=""):
+    """Send photo to admin Telegram"""
     try:
         bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-        your_chat_id = os.getenv("TELEGRAM_CHAT_ID")  # YOUR personal numeric ID
+        chat_id = os.getenv("TELEGRAM_CHAT_ID")
         
-        if not bot_token or not your_chat_id:
-            return False, "Telegram not configured"
+        if not bot_token or not chat_id:
+            print("Telegram not configured - missing tokens")  # This will show in console
+            return False, "Telegram not configured. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env file"
         
         url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
         
-        # Send photo from memory
-        files = {'photo': ('payment_proof.png', photo_data, 'image/png')}
-        data = {
-            'chat_id': your_chat_id,  # This sends to YOUR Telegram inbox
-            'caption': caption,
-            'parse_mode': 'HTML'
-        }
-        
-        response = requests.post(url, files=files, data=data, timeout=30)
+        with open(photo_path, 'rb') as photo:
+            files = {'photo': photo}
+            data = {'chat_id': chat_id, 'caption': caption, 'parse_mode': 'Markdown'}
+            response = requests.post(url, files=files, data=data, timeout=30)
         
         if response.status_code == 200:
-            return True, "Sent to your Telegram!"
+            return True, "Photo sent successfully"
         else:
-            return False, f"Error: {response.status_code}"
+            return False, f"Telegram error: {response.status_code} - {response.text}"
             
     except Exception as e:
-        return False, f"Error: {str(e)}"
-
-# ===== ENHANCED PASSWORD REQUEST SYSTEM WITH TELEGRAM =====
-with col2:
-    st.markdown("### 📤 Submit Payment Proof")
-    
-    # File uploader for screenshot
-    uploaded_file = st.file_uploader(
-        "Upload payment screenshot", 
-        type=['png', 'jpg', 'jpeg'],
-        help="Take a screenshot of your successful 25 USDT payment and upload it here"
-    )
-    
-    # Optional: Add transaction ID for easier verification
-    tx_id = st.text_input(
-        "Transaction ID (optional)", 
-        placeholder="Paste your transaction ID here if available",
-        help="This helps us verify faster"
-    )
-    
-    # Optional: User contact info
-    col_a, col_b = st.columns(2)
-    with col_a:
-        user_telegram = st.text_input("Your Telegram (optional)", placeholder="@username", 
-                                      help="So we can send you the password faster")
-    with col_b:
-        user_email = st.text_input("Your Email (optional)", placeholder="email@example.com")
-    
-    # Submit button
-    if st.button("📨 Submit Payment Proof", use_container_width=True, type="primary"):
-        if uploaded_file is not None:
-            with st.spinner("Sending payment proof to admin..."):
-                try:
-                    # Generate unique filename
-                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    random_id = secrets.token_hex(4)
-                    filename = f"{PAYMENT_PROOFS_DIR}/payment_{timestamp}_{random_id}.png"
-                    
-                    # Save the file locally
-                    with open(filename, "wb") as f:
-                        f.write(uploaded_file.getbuffer())
-                    
-                    # Prepare caption for Telegram
-                    caption = f"🔔 *NEW PAYMENT PROOF RECEIVED*\n\n"
-                    caption += f"⏰ *Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                    caption += f"💰 *Amount:* 25 USDT (BEP20)\n"
-                    caption += f"🔑 *TXID:* {tx_id or 'Not provided'}\n"
-                    caption += f"📱 *Telegram:* {user_telegram or 'Not provided'}\n"
-                    caption += f"📧 *Email:* {user_email or 'Not provided'}\n"
-                    caption += f"🆔 *File:* {filename}\n\n"
-                    caption += f"✅ *Action:* Reply with password or use admin panel"
-                    
-                    # Send to Telegram
-                    success, message = send_telegram_photo(filename, caption)
-                    
-                    if success:
-                        st.success("✅ Payment proof sent to admin! You'll receive your password soon.")
-                        
-                        # Show next steps
-                        st.info(f"""
-                        **📱 Next steps:**
-                        1. ✅ Admin received your payment proof
-                        2. 🔐 Password will be sent within 5 minutes
-                        3. 📨 Check your Telegram {user_telegram or 'messages'}
-                        4. 🔓 Enter password above to unlock access
-                        
-                        **⏱️ Expected response time: 2-5 minutes**
-                        """)
-                        
-                        st.balloons()
-                    else:
-                        st.error(f"❌ Failed to send to Telegram: {message}")
-                        st.warning("Please contact admin directly via the button below")
-                        
-                        # Save metadata for manual processing
-                        metadata_file = f"{PAYMENT_PROOFS_DIR}/payment_{timestamp}_{random_id}.txt"
-                        with open(metadata_file, "w") as f:
-                            f.write(f"Submission Time: {datetime.now()}\n")
-                            f.write(f"Transaction ID: {tx_id or 'Not provided'}\n")
-                            f.write(f"Telegram: {user_telegram or 'Not provided'}\n")
-                            f.write(f"Email: {user_email or 'Not provided'}\n")
-                            f.write(f"Status: Pending Manual Verification\n")
-                        
-                except Exception as e:
-                    st.error(f"Error processing your request: {str(e)}")
-        else:
-            st.warning("Please upload a screenshot of your payment")
+        return False, f"Error sending to Telegram: {str(e)}"
 
 # ===== PAYMENT CONFIGURATION =====
 YOUR_WALLET = os.getenv("YOUR_WALLET", "0x87ea9fc331bbe75fdae07f291046920b878e1367")  # Your BEP20 wallet
 ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 2592000))  # 30 days in seconds
 ACCESS_PRICE_USDT = 25  # $25 USDT
+
+# Create directory for payment proofs
+PAYMENT_PROOFS_DIR = "payment_proofs"
+os.makedirs(PAYMENT_PROOFS_DIR, exist_ok=True)
 
 
 # ===== PASSWORD MANAGEMENT SYSTEM =====
@@ -692,7 +598,16 @@ if not st.session_state.access_granted and col_left:
                 else:
                     st.warning("Please enter a password")
         
-
+        with col2:
+            # Direct contact button (backup)
+            st.markdown("""
+            <a href="https://t.me/forexbigadmin" target="_blank">
+                <button style="background-color: #0088cc; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px;">
+                    📱 Contact Admin Directly
+                </button>
+            </a>
+            """, unsafe_allow_html=True)
+        
 
 
 # RIGHT COLUMN - Payment Proof Upload (Only shown when NOT granted)
@@ -706,6 +621,21 @@ if not st.session_state.access_granted and col_right:
             type=['png', 'jpg', 'jpeg'],
             help="Take a screenshot of your successful 25 USDT payment and upload it here"
         )
+        
+        # Optional: Add transaction ID for easier verification
+        tx_id = st.text_input(
+            "Transaction ID (optional)", 
+            placeholder="Paste your transaction ID here if available",
+            help="This helps us verify faster"
+        )
+        
+        # Optional: User contact info
+        col_a, col_b = st.columns(2)
+        with col_a:
+            user_telegram = st.text_input("Your Telegram (optional)", placeholder="@username", 
+                                          help="So we can send you the password faster")
+        with col_b:
+            user_email = st.text_input("Your Email (optional)", placeholder="email@example.com")
         
         # Submit button
         if st.button("📨 Submit Payment Proof", use_container_width=True, type="primary"):
@@ -766,14 +696,17 @@ if not st.session_state.access_granted and col_right:
                         st.error(f"Error processing your request: {str(e)}")
             else:
                 st.warning("Please upload a screenshot of your payment")
+        
         # Direct contact button (backup)
         st.markdown("""
-        <a href="https://t.me/vubajanja" target="_blank">
+        <a href="https://t.me/forexbigadmin" target="_blank">
             <button style="background-color: #0088cc; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px;">
                 📱 Contact Admin Directly
             </button>
         </a>
-        """, unsafe_allow_html=True)        
+        """, unsafe_allow_html=True)
+
+
 # ===== PASSWORD-BASED ACCESS SYSTEM =====
 # Check access expiry
 if st.session_state.access_expiry:
@@ -1010,6 +943,39 @@ with content_container:
                 time.sleep(30)
                 st.rerun()
         
+        else:
+            st.info("👈 Select a coin and click 'Search' to generate signals")
+    
+    else:
+        # FREE USERS - Show preview (with payment stuff on left)
+        st.title("🤖 Premium Trading Signals")
+        
+        col1, col2 = st.columns([2, 1])
+        
+        with col1:
+            st.markdown("""
+            ### 🚀 Get AI-Powered Trading Signals
+            
+            **✨ What you get:**
+            - 📊 Real-time signals for major cryptocurrencies
+            - 🎯 Entry, Stop Loss, and Take Profit levels
+            - 📈 Multiple timeframes (15m, 1h, 4h, 1d)
+            - 🔍 Detailed AI analysis with reasoning
+            - 💰 Risk/Reward ratios for each trade
+            
+            **💎 Price: 25 USDT (BEP20) for 30 days access**
+            """)
+        
+        with col2:
+            st.markdown(f"""
+            <div class="payment-box">
+                <h2>💰 Price</h2>
+                <h1>25 USDT</h1>
+                <p>BEP20 Network</p>
+                <hr>
+                <p><strong>30 Days Access</strong></p>
+            </div>
+            """, unsafe_allow_html=True)
         
         # Sample preview
         st.markdown("---")
