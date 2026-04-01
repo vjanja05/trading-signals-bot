@@ -30,40 +30,98 @@ st.set_page_config(
 # Load environment variables
 load_dotenv()
 
-# ===== TELEGRAM IMAGE SENDER FUNCTION - DEFINED FIRST =====
-def send_telegram_photo(photo_path, caption=""):
+# ===== TELEGRAM IMAGE SENDER FUNCTION =====
+def send_telegram_photo(photo_data, caption=""):
     """Send photo to admin Telegram"""
     try:
         bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-        chat_id = os.getenv("579821226")
+        chat_id = os.getenv("579821226")  # Your numeric chat ID, not @username
         
         if not bot_token or not chat_id:
-            print("Telegram not configured - missing tokens")  # This will show in console
-            return False, "Telegram not configured. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env file"
+            return False, "Telegram not configured. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID"
         
         url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
         
-        with open(photo_path, 'rb') as photo:
-            files = {'photo': photo}
-            data = {'chat_id': chat_id, 'caption': caption, 'parse_mode': 'Markdown'}
-            response = requests.post(url, files=files, data=data, timeout=30)
+        # Send photo from memory
+        files = {'photo': ('payment_proof.png', photo_data, 'image/png')}
+        data = {
+            'chat_id': chat_id,
+            'caption': caption,
+            'parse_mode': 'HTML'
+        }
+        
+        response = requests.post(url, files=files, data=data, timeout=30)
         
         if response.status_code == 200:
             return True, "Photo sent successfully"
         else:
-            return False, f"Telegram error: {response.status_code} - {response.text}"
+            return False, f"Telegram error: {response.status_code}"
             
     except Exception as e:
         return False, f"Error sending to Telegram: {str(e)}"
+# ===== TELEGRAM IMAGE SENDER FUNCTION - DEFINED FIRST =====
+if not st.session_state.access_granted and col_right:
+    with col_right:
+        st.markdown("### 📤 Submit Payment Proof")
+        
+        # File uploader
+        uploaded_file = st.file_uploader(
+            "Upload payment screenshot", 
+            type=['png', 'jpg', 'jpeg'],
+            key="payment_screenshot"
+        )
+        
+        # Transaction ID (optional)
+        tx_id = st.text_input(
+            "Transaction ID (optional)", 
+            placeholder="Paste your transaction ID here",
+            key="tx_id_field"
+        )
+        
+        # Submit button
+        if st.button("📨 Send Payment Proof", use_container_width=True, type="primary"):
+            if uploaded_file is not None:
+                with st.spinner("Sending to admin..."):
+                    try:
+                        # Prepare caption
+                        caption = f"""
+🔔 NEW PAYMENT PROOF
 
+💰 Amount: 25 USDT (BEP20)
+⏰ Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+🔑 TXID: {tx_id if tx_id else 'Not provided'}
+
+✅ Action: Verify payment and send password
+"""
+                        
+                        # Send photo directly from memory
+                        photo_bytes = uploaded_file.getvalue()
+                        success, message = send_telegram_photo(photo_bytes, caption)
+                        
+                        if success:
+                            st.success("✅ Payment proof sent! Password within 5 minutes.")
+                            st.balloons()
+                        else:
+                            st.error(f"❌ Failed: {message}")
+                            st.warning("Contact admin directly: @forexbigadmin")
+                            
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
+            else:
+                st.warning("Please upload a screenshot")
+        
+        # Direct contact button
+        st.markdown("""
+        <a href="https://t.me/forexbigadmin" target="_blank">
+            <button style="background-color: #0088cc; color: white; padding: 12px; border: none; border-radius: 8px; width: 100%; cursor: pointer;">
+                📱 Contact Admin Directly
+            </button>
+        </a>
+        """, unsafe_allow_html=True)
 # ===== PAYMENT CONFIGURATION =====
 YOUR_WALLET = os.getenv("YOUR_WALLET", "0x87ea9fc331bbe75fdae07f291046920b878e1367")  # Your BEP20 wallet
 ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 2592000))  # 30 days in seconds
 ACCESS_PRICE_USDT = 25  # $25 USDT
-
-# Create directory for payment proofs
-PAYMENT_PROOFS_DIR = "payment_proofs"
-os.makedirs(PAYMENT_PROOFS_DIR, exist_ok=True)
 
 
 # ===== PASSWORD MANAGEMENT SYSTEM =====
