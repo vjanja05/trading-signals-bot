@@ -738,8 +738,8 @@ with content_container:
         # Coin selection dropdown (single selection)
         available_coins = [
             "BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", 
-            "ADA/USDT", "XRP/USDT", "DOGE/USDT", "DOT/USDT",
-            "LINK/USDT", "AVAX/USDT", "MATIC/USDT"
+            "ADA/USDT", "XRP/USDT", "DOGE/USDT", "DOT/USDT", "LAB/USDT",
+            "LINK/USDT", "AVAX/USDT", "MATIC/USDT", "TNSR/USDT", "SEUL/USDT"
         ]
         
         col1, col2, col3 = st.columns([2, 1, 1])
