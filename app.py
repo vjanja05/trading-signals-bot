@@ -737,7 +737,7 @@ with content_container:
         
         # Coin selection dropdown (single selection)
         available_coins = [
-            "BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "WIF/USDT",
+            "BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "WIF/USDT", "RAVE/USDT", "NOM/USDT",
             "ADA/USDT", "XRP/USDT", "DOGE/USDT", "DOT/USDT", "LAB/USDT",
             "LINK/USDT", "AVAX/USDT", "MATIC/USDT", "TNSR/USDT", "SEUL/USDT"
         ]
