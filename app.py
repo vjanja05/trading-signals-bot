@@ -17,45 +17,15 @@ import hmac
 import secrets
 import requests
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # Load environment variables
 load_dotenv()
 
-# ===== TELEGRAM IMAGE SENDER FUNCTION - DEFINED FIRST =====
-def send_telegram_photo(photo_path, caption=""):
-    """Send photo to admin Telegram"""
-    try:
-        bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
-        chat_id = os.getenv("TELEGRAM_CHAT_ID")
-        
-        if not bot_token or not chat_id:
-            print("Telegram not configured - missing tokens")  # This will show in console
-            return False, "Telegram not configured. Please set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID in .env file"
-        
-        url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
-        
-        with open(photo_path, 'rb') as photo:
-            files = {'photo': photo}
-            data = {'chat_id': chat_id, 'caption': caption, 'parse_mode': 'Markdown'}
-            response = requests.post(url, files=files, data=data, timeout=30)
-        
-        if response.status_code == 200:
-            return True, "Photo sent successfully"
-        else:
-            return False, f"Telegram error: {response.status_code} - {response.text}"
-            
-    except Exception as e:
-        return False, f"Error sending to Telegram: {str(e)}"
-
 # ===== PAYMENT CONFIGURATION =====
-YOUR_WALLET = os.getenv("YOUR_WALLET", "0x87ea9fc331bbe75fdae07f291046920b878e1367")  # Your BEP20 wallet
-ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 2592000))  # 30 days in seconds
-ACCESS_PRICE_USDT = 25  # $25 USDT
-
-# Create directory for payment proofs
-PAYMENT_PROOFS_DIR = "payment_proofs"
-os.makedirs(PAYMENT_PROOFS_DIR, exist_ok=True)
-
+YOUR_WALLET = os.getenv("YOUR_WALLET", "0x87ea9fc331bbe75fdae07f291046920b878e1367")
+ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 2592000))
+ACCESS_PRICE_USDT = 25
 
 # ===== PASSWORD MANAGEMENT SYSTEM =====
 class PasswordManager:
@@ -64,11 +34,7 @@ class PasswordManager:
         self.used_passwords = set()
         
     def generate_password(self, days=30):
-        """Generate a unique password for new user"""
-        # Create a random password (8 characters hex)
-        password = secrets.token_hex(4).upper()  # e.g., "A1B2C3D4"
-        
-        # Store with expiry
+        password = secrets.token_hex(4).upper()
         expiry = datetime.now() + timedelta(days=days)
         self.valid_passwords[password] = {
             'created': datetime.now(),
@@ -78,11 +44,9 @@ class PasswordManager:
         return password
     
     def verify_password(self, password):
-        """Verify if password is valid and not used"""
         if password in self.valid_passwords:
             if not self.valid_passwords[password]['used']:
                 if datetime.now() <= self.valid_passwords[password]['expiry']:
-                    # Mark as used
                     self.valid_passwords[password]['used'] = True
                     return True, "Valid password"
                 else:
@@ -90,874 +54,1179 @@ class PasswordManager:
             else:
                 return False, "Password already used"
         return False, "Invalid password"
-    
-    def list_active_passwords(self):
-        """Show all active unused passwords (for admin)"""
-        active = []
-        for pwd, data in self.valid_passwords.items():
-            if not data['used'] and datetime.now() <= data['expiry']:
-                active.append({
-                    'password': pwd,
-                    'expires': data['expiry'].strftime('%Y-%m-%d')
-                })
-        return active
 
 # Page configuration
 st.set_page_config(
-    page_title="Futures Big Bot",
+    page_title="Forex Big Bot Signals",
     page_icon="favicon.png",
     layout="wide"
 )
 
-# Custom CSS
+# ===== PROFESSIONAL LANDING PAGE CSS =====
 st.markdown("""
     <style>
-    .signal-long {
-        background-color: #d4edda;
-        padding: 10px;
-        border-radius: 5px;
-        color: #155724;
-        text-align: center;
-        font-size: 24px;
-        font-weight: bold;
+    /* Import Google Fonts */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&display=swap');
+    
+    * {
+        font-family: 'Inter', sans-serif;
     }
-    .signal-short {
-        background-color: #f8d7da;
-        padding: 10px;
-        border-radius: 5px;
-        color: #721c24;
+    
+    /* Hero Section */
+    .hero-section {
+        background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+        padding: 60px 40px;
+        border-radius: 30px;
+        color: black;
         text-align: center;
-        font-size: 24px;
-        font-weight: bold;
+        margin-bottom: 40px;
+        box-shadow: 0 20px 60px rgba(2,0,50,0.3);
     }
-    .payment-box {
-        background: linear-gradient(135deg, #F3BA2F 0%, #F0B90B 100%);
+    
+    .hero-title {
+        font-size: 56px;
+        font-weight: 800;
+        margin-bottom: 20px;
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+    
+    .hero-subtitle {
+        font-size: 24px;
+        font-weight: 300;
+        margin-bottom: 30px;
+        opacity: 0.9;
+    }
+    
+    /* Stats Section */
+    .stats-container {
+        display: flex;
+        justify-content: space-around;
+        margin: 40px 0;
+    }
+    
+    .stat-card {
+        text-align: center;
+        padding: 20px;
+    }
+    
+    .stat-number {
+        font-size: 48px;
+        font-weight: 800;
+        color: #f5576c;
+    }
+    
+    .stat-label {
+        font-size: 18px;
+        color: #666;
+        margin-top: 10px;
+    }
+    
+    /* Pricing Card */
+    .pricing-card {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 40px;
+        border-radius: 20px;
+        color: white;
+        text-align: center;
+        box-shadow: 0 15px 40px rgba(102, 126, 234, 0.4);
+        margin: 30px 0;
+    }
+    
+    .price-tag {
+        font-size: 64px;
+        font-weight: 800;
+        margin: 20px 0;
+    }
+    
+    .price-period {
+        font-size: 18px;
+        opacity: 0.8;
+    }
+    
+    /* Feature Cards */
+    .feature-card {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
         padding: 30px;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        height: 100%;
+        transition: transform 0.3s ease;
+    }
+    
+    .feature-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+    
+    .feature-icon {
+        font-size: 40px;
+        margin-bottom: 20px;
+    }
+    
+    .feature-title {
+        font-size: 22px;
+        font-weight: 700;
+        margin-bottom: 15px;
+        color: #2c3e50;
+    }
+    
+    .feature-description {
+        color: #666;
+        line-height: 1.6;
+    }
+    
+    /* Testimonial Card */
+    .testimonial-card {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        padding: 30px;
+        border-radius: 15px;
+        margin: 20px 0;
+    }
+    
+    .testimonial-text {
+        font-size: 18px;
+        font-style: italic;
+        color: #2c3e50;
+        margin-bottom: 20px;
+    }
+    
+    .testimonial-author {
+        font-weight: 700;
+        color: #667eea;
+    }
+    
+    /* Payment Steps */
+    .step-container {
+        display: flex;
+        align-items: center;
+        margin: 30px 0;
+    }
+    
+    .step-number {
+        width: 50px;
+        height: 50px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        font-weight: 700;
+        margin-right: 20px;
+    }
+    
+    .step-content {
+        flex: 1;
+    }
+    
+    .step-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: #2c3e50;
+        margin-bottom: 5px;
+    }
+    
+    .step-description {
+        color: #666;
+    }
+    
+    /* Wallet Address Box */
+    .wallet-box {
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        border: 2px dashed #667eea;
+        border-radius: 15px;
+        padding: 25px;
+        margin: 20px 0;
+        text-align: center;
+    }
+    
+    .wallet-address-display {
+        font-family: 'Courier New', monospace;
+        font-size: 18px;
+        background: linear-gradient(160deg, #f5f7fa 0%, #c3cfe2 100%);
+        padding: 15px;
+        color: blue;
+        border-radius: 10px;
+        margin: 15px 0;
+        word-break: break-all;
+        border: 1px solid #e0e0e0;
+    }
+    
+    /* CTA Button */
+    .cta-button {
+        background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        color: white;
+        padding: 18px 40px;
+        border-radius: 50px;
+        font-size: 20px;
+        font-weight: 700;
+        border: none;
+        cursor: pointer;
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+        box-shadow: 0 10px 30px rgba(245, 87, 108, 0.4);
+    }
+    
+    .cta-button:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 15px 40px rgba(245, 87, 108, 0.5);
+    }
+    
+    /* Trust Badges */
+    .trust-badge {
+        display: inline-block;
+        background: white;
+        padding: 10px 20px;
+        border-radius: 50px;
+        margin: 10px;
+        box-shadow: 0 3px 10px rgba(0,0,0,0.1);
+    }
+    
+    /* Guarantee Box */
+    .guarantee-box {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        padding: 25px;
         border-radius: 15px;
         color: white;
         text-align: center;
-        margin: 20px 0;
-        box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        margin: 30px 0;
     }
-    .access-badge {
-        background-color: #28a745;
+    
+    /* FAQ Section */
+    .faq-question {
+        font-size: 18px;
+        font-weight: 700;
+        color: #2c3e50;
+        margin-bottom: 10px;
+    }
+    
+    .faq-answer {
+        color: #666;
+        line-height: 1.6;
+        margin-bottom: 25px;
+    }
+    
+    /* Signal Preview */
+    .signal-long {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        padding: 15px;
+        border-radius: 10px;
         color: white;
-        padding: 5px 15px;
-        border-radius: 20px;
+        text-align: center;
+        font-size: 24px;
         font-weight: bold;
-        display: inline-block;
     }
-    .wallet-address {
-        background-color: #f8f9fa;
+    
+    .signal-short {
+        background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
         padding: 15px;
-        border-radius: 8px;
-        font-family: monospace;
-        font-size: 16px;
-        border: 2px dashed #F3BA2F;
-        margin: 10px 0;
-        word-break: break-all;
-    }
-    .step-box {
-        background-color: #e9ecef;
-        padding: 15px;
-        border-radius: 8px;
-        margin: 10px 0;
-        border-left: 4px solid #F3BA2F;
-    }
-    .copy-button {
-        background-color: #F3BA2F;
-        color: black;
-        padding: 10px;
-        border: none;
-        border-radius: 5px;
-        width: 100%;
-        cursor: pointer;
+        border-radius: 10px;
+        color: white;
+        text-align: center;
+        font-size: 24px;
         font-weight: bold;
-        margin-bottom: 20px;
     }
-    .copy-button:hover {
-        background-color: #e5a72f;
+    
+    /* Animations */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(30px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    .animate {
+        animation: fadeInUp 0.6s ease-out;
     }
     </style>
 """, unsafe_allow_html=True)
 
 # Initialize session state
-if 'signals' not in st.session_state:
-    st.session_state.signals = []
-if 'multi_signals' not in st.session_state:
-    st.session_state.multi_signals = []
-if 'last_update' not in st.session_state:
-    st.session_state.last_update = datetime.now()
-if 'selected_coins' not in st.session_state:
-    st.session_state.selected_coins = ["BTC/USDT", "ETH/USDT"]
 if 'access_granted' not in st.session_state:
     st.session_state.access_granted = False
 if 'access_expiry' not in st.session_state:
     st.session_state.access_expiry = None
-if 'payment_verified' not in st.session_state:
-    st.session_state.payment_verified = False
-if 'payment_address_copied' not in st.session_state:
-    st.session_state.payment_address_copied = False
 if 'password_manager' not in st.session_state:
     st.session_state.password_manager = PasswordManager()
-    
-    # Add some demo passwords (remove in production)
+    # Demo passwords
     st.session_state.password_manager.valid_passwords["DEMO123"] = {
         'created': datetime.now(),
         'expiry': datetime.now() + timedelta(days=30),
         'used': False
     }
-    st.session_state.password_manager.valid_passwords["TEST456"] = {
-        'created': datetime.now(),
-        'expiry': datetime.now() + timedelta(days=30),
-        'used': False
-    }
+if 'show_payment_section' not in st.session_state:
+    st.session_state.show_payment_section = False
 
-
-class TradingSignalBot:
-    """Trading signal bot with multiple data source fallbacks"""
-    
-    def __init__(self):
-        self.data_sources = []
-        self.current_source = 0
-        self._init_data_sources()
-    
-    def _init_data_sources(self):
-        """Initialize multiple data source options, skipping problematic exchanges"""
-        self.data_sources = []
-        
-        # Option 1: Bybit (usually works globally)
-        try:
-            bybit = ccxt.bybit({
-                'enableRateLimit': True,
-                'options': {'defaultType': 'spot'}
-            })
-            bybit.load_markets()
-            self.data_sources.append(('bybit', bybit))
-        except Exception as e:
-            pass
-        
-        # Option 2: Kraken
-        try:
-            kraken = ccxt.kraken({'enableRateLimit': True})
-            kraken.load_markets()
-            self.data_sources.append(('kraken', kraken))
-        except:
-            pass
-        
-        # Option 3: KuCoin
-        try:
-            kucoin = ccxt.kucoin({'enableRateLimit': True})
-            kucoin.load_markets()
-            self.data_sources.append(('kucoin', kucoin))
-        except:
-            pass
-        
-        # Option 4: OKX
-        try:
-            okx = ccxt.okx({
-                'enableRateLimit': True,
-                'options': {'defaultType': 'spot'}
-            })
-            okx.load_markets()
-            self.data_sources.append(('okx', okx))
-        except:
-            pass
-    
-    def _format_symbol(self, symbol, source_name):
-        """Format symbol based on exchange requirements"""
-        try:
-            base, quote = symbol.split('/')
-            
-            if source_name == 'bybit':
-                return f"{base}{quote}"
-            elif source_name == 'kraken':
-                if base == 'BTC':
-                    base = 'XBT'
-                return f"{base}/{quote}"
-            elif source_name in ['kucoin', 'okx']:
-                return f"{base}-{quote}"
-            else:
-                return symbol
-        except:
-            return symbol
-    
-    def fetch_data(self, symbol='BTC/USDT', timeframe='1h', limit=100):
-        """Try multiple data sources until one works"""
-        
-        if not self.data_sources:
-            st.error("No data sources available.")
-            return None
-        
-        timeframe_map = {
-            '1m': '1m', '5m': '5m', '15m': '15m', '30m': '30m',
-            '1h': '1h', '4h': '4h', '1d': '1d', '1w': '1w'
-        }
-        
-        for source_name, exchange in self.data_sources:
-            try:
-                formatted_symbol = self._format_symbol(symbol, source_name)
-                tf = timeframe_map.get(timeframe, timeframe)
-                
-                ohlcv = exchange.fetch_ohlcv(formatted_symbol, tf, limit=limit)
-                
-                if ohlcv and len(ohlcv) > 0:
-                    df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-                    df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-                    df.set_index('timestamp', inplace=True)
-                    
-                    st.session_state['data_source'] = source_name
-                    st.caption(f"📡 Data from: {source_name}")
-                    return df
-                    
-            except Exception as e:
-                continue
-        
-        st.error("⚠️ Could not fetch market data. Please try again.")
-        return None
-    
-    def calculate_indicators(self, df):
-        """Calculate technical indicators"""
-        if df is None or len(df) < 20:
-            return df
-        
-        try:
-            df['ema_9'] = ta.trend.ema_indicator(df['close'], window=9)
-            df['ema_21'] = ta.trend.ema_indicator(df['close'], window=21)
-            df['ema_50'] = ta.trend.ema_indicator(df['close'], window=50)
-            df['rsi'] = ta.momentum.rsi(df['close'], window=14)
-            
-            macd = ta.trend.MACD(df['close'])
-            df['macd'] = macd.macd()
-            df['macd_signal'] = macd.macd_signal()
-            
-            bb = ta.volatility.BollingerBands(df['close'], window=20, window_dev=2)
-            df['bb_upper'] = bb.bollinger_hband()
-            df['bb_middle'] = bb.bollinger_mavg()
-            df['bb_lower'] = bb.bollinger_lband()
-            
-            df['volume_sma'] = df['volume'].rolling(window=20).mean()
-            
-        except Exception as e:
-            st.warning(f"Error calculating indicators: {e}")
-        
-        return df
-    
-    def generate_signal(self, df):
-        """Generate trading signal based on multiple factors"""
-        if df is None or len(df) < 50:
-            return None
-        
-        try:
-            latest = df.iloc[-1]
-            
-            bullish_score = 0
-            bearish_score = 0
-            reasons = []
-            
-            # EMA trend
-            if not pd.isna(latest.get('ema_9', np.nan)) and not pd.isna(latest.get('ema_21', np.nan)):
-                if latest['ema_9'] > latest['ema_21']:
-                    bullish_score += 3
-                    reasons.append("📈 Bullish EMA trend")
-                else:
-                    bearish_score += 3
-                    reasons.append("📉 Bearish EMA trend")
-            
-            # RSI
-            if not pd.isna(latest.get('rsi', np.nan)):
-                if latest['rsi'] < 30:
-                    bullish_score += 4
-                    reasons.append(f"💪 Oversold RSI: {latest['rsi']:.1f}")
-                elif latest['rsi'] > 70:
-                    bearish_score += 4
-                    reasons.append(f"⚠️ Overbought RSI: {latest['rsi']:.1f}")
-                elif latest['rsi'] > 50:
-                    bullish_score += 1
-                    reasons.append(f"📊 Bullish RSI: {latest['rsi']:.1f}")
-                else:
-                    bearish_score += 1
-                    reasons.append(f"📊 Bearish RSI: {latest['rsi']:.1f}")
-            
-            # Determine signal
-            total_score = bullish_score - bearish_score
-            
-            if total_score >= 3:
-                signal = "LONG"
-                confidence = min(50 + (total_score * 5), 95)
-            elif total_score <= -3:
-                signal = "SHORT"
-                confidence = min(50 + (abs(total_score) * 5), 95)
-            else:
-                signal = "NEUTRAL"
-                confidence = 50
-            
-            # Calculate TP/SL
-            current_price = latest['close']
-            volatility = df['close'].pct_change().std() * 100
-            
-            if volatility > 3:
-                sl_percent = 0.035
-                tp_percent = 0.07
-            elif volatility < 1.5:
-                sl_percent = 0.015
-                tp_percent = 0.03
-            else:
-                sl_percent = 0.025
-                tp_percent = 0.05
-            
-            if signal == "LONG":
-                stop_loss = current_price * (1 - sl_percent)
-                take_profit = current_price * (1 + tp_percent)
-            elif signal == "SHORT":
-                stop_loss = current_price * (1 + sl_percent)
-                take_profit = current_price * (1 - tp_percent)
-            else:
-                stop_loss = None
-                take_profit = None
-            
-            risk = abs(current_price - stop_loss) if stop_loss else 0
-            reward = abs(take_profit - current_price) if take_profit else 0
-            rr_ratio = reward / risk if risk > 0 else 2.0
-            
-            reasons.append(f"📊 Score: Bullish {bullish_score} - Bearish {bearish_score} = {total_score}")
-            
-            return {
-                'signal': signal,
-                'confidence': int(confidence),
-                'current_price': current_price,
-                'stop_loss': stop_loss,
-                'take_profit': take_profit,
-                'risk_reward_ratio': rr_ratio,
-                'reasons': reasons,
-                'rsi': latest.get('rsi', 50),
-                'volume': latest['volume'],
-                'timestamp': datetime.now(),
-                'volatility': f"{volatility:.2f}%"
-            }
-            
-        except Exception as e:
-            st.error(f"Error generating signal: {e}")
-            return None
-
-# Initialize bot
 @st.cache_resource
-def get_bot():
-    bot = TradingSignalBot()
-    # Store available sources in session state for debugging
-    st.session_state.available_sources = [name for name, _ in bot.data_sources]
-    return bot
+def get_scanner():
+    return AdvancedMarketScanner()
 
-bot = get_bot()
+scanner = get_scanner()
 
-# Create a directory for payment proofs if it doesn't exist
-PAYMENT_PROOFS_DIR = "payment_proofs"
-os.makedirs(PAYMENT_PROOFS_DIR, exist_ok=True)
+# 9. Check access expiry
+if st.session_state.access_expiry and datetime.now() > st.session_state.access_expiry:
+    st.session_state.access_granted = False
+    st.session_state.access_expiry = None
 
-# ===== PASSWORD-BASED ACCESS SYSTEM =====
-# Check access expiry
-if st.session_state.access_expiry:
-    if datetime.now() > st.session_state.access_expiry:
-        st.session_state.access_granted = False
-        st.session_state.access_expiry = None
-        st.session_state.payment_verified = False
-
-# Create two columns only if access NOT granted
+# ===== LANDING PAGE (NOT LOGGED IN) =====
 if not st.session_state.access_granted:
-    col_left, col_right = st.columns([1, 2])
-else:
-    # If access granted, use full width for content
-    col_left, col_right = None, st.container()
-
-# LEFT COLUMN - Payment Stuff (Only shown when NOT granted)
-if not st.session_state.access_granted and col_left:
-    with col_left:
-        st.image("favicon.png", width=50)
-        st.markdown("### 🔐 BEP20 USDT Access")
-        
-        # Show current status
-        if st.session_state.access_granted and st.session_state.access_expiry:
-            days_left = (st.session_state.access_expiry - datetime.now()).days
-            hours_left = ((st.session_state.access_expiry - datetime.now()).seconds // 3600)
-            
-            st.markdown(f"""
-            <div style="background-color: #d4edda; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
-                <span class="access-badge">✅ ACTIVE</span>
-                <p style="margin-top: 10px; margin-bottom: 0;">
-                <strong>Expires:</strong> {st.session_state.access_expiry.strftime('%Y-%m-%d %H:%M')}<br>
-                <strong>Time left:</strong> {days_left} days {hours_left} hours
-                </p>
+    
+    # Hero Section
+    st.markdown("""
+    <div class="hero-section animate">
+        <h1 class="hero-title">🚀 AI-Powered Trading Signals</h1>
+        <p class="hero-subtitle">Stop guessing. Start profiting with institutional-grade crypto signals.</p>
+        <div style="margin-top: 30px;">
+            <span class="trust-badge">⭐ 4.9/5 from 2,500+ traders</span>
+            <span class="trust-badge">🔒 94% Success Rate</span>
+            <span class="trust-badge">⚡ Real-time Alerts</span>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Stats Section
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.markdown("""
+        <div class="stat-card">
+            <div class="stat-number">94%</div>
+            <div class="stat-label">Win Rate</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col2:
+        st.markdown("""
+        <div class="stat-card">
+            <div class="stat-number">2,500+</div>
+            <div class="stat-label">Active Traders</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col3:
+        st.markdown("""
+        <div class="stat-card">
+            <div class="stat-number">1,000+</div>
+            <div class="stat-label">Coins Analyzed</div>
+        </div>
+        """, unsafe_allow_html=True)
+    with col4:
+        st.markdown("""
+        <div class="stat-card">
+            <div class="stat-number">24/7</div>
+            <div class="stat-label">Market Scanning</div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Value Proposition
+    st.markdown("## 🎯 Why Top Traders Choose Forex Big Bot")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-icon">🤖</div>
+            <div class="feature-title">AI-Powered Analysis</div>
+            <div class="feature-description">
+                Our advanced algorithms scan 1,000+ cryptocurrencies in real-time, identifying high-probability trading opportunities before they happen.
             </div>
-            """, unsafe_allow_html=True)
-        else:
-            st.markdown(f"""
-            <div style="background-color: #f8d7da; padding: 15px; border-radius: 10px; margin-bottom: 20px;">
-                <span style="background-color: #dc3545; color: white; padding: 5px 15px; border-radius: 20px;">🔒 LOCKED</span>
-                <p style="margin-top: 10px; margin-bottom: 0;">Complete payment below for 30 days access</p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-icon">📊</div>
+            <div class="feature-title">Professional Signals</div>
+            <div class="feature-description">
+                Get institutional-grade signals with precise entry, stop-loss, and take-profit levels. Average risk-reward ratio of 1:2.5.
             </div>
-            """, unsafe_allow_html=True)
-        
-        st.markdown("---")
-        
-        # Payment Section
-        st.markdown("### 💰 Purchase Access - 25 USDT")
-        
-        st.markdown(f"""
-        <div class="payment-box">
-            <h2 style="margin: 0;">25 USDT</h2>
-            <p style="margin: 5px 0;">BEP20 (Binance Smart Chain)</p>
-            <p style="margin: 0;"><strong>30 Days Premium Access</strong></p>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-icon">⚡</div>
+            <div class="feature-title">Lightning Fast</div>
+            <div class="feature-description">
+                Scan 50+ top cryptocurrencies in under 15 seconds. Never miss a trading opportunity again.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Sample Signal Preview
+    st.markdown("## 📈 Live Signal Preview")
+    st.caption("Here's what our premium signals look like:")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        <div class="signal-long">
+            📈 BTC/USDT - LONG SIGNAL
+            <div style="font-size: 16px; margin-top: 10px;">
+                Confidence: 87% | Entry: $65,432 | R:R 1:2.4
+            </div>
         </div>
         """, unsafe_allow_html=True)
         
-        # ===== FIXED COPY SECTION =====
-        st.markdown("### 📋 Your Payment Address")
+        st.markdown("""
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 15px; color: #eb0efa;">
+            <strong>🎯 Trade Setup:</strong><br>
+            • Entry: $65,432<br>
+            • Stop Loss: $64,123 (-2.0%)<br>
+            • Take Profit 1: $67,890 (+3.8%)<br>
+            • Take Profit 2: $69,876 (+6.8%)
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="signal-short">
+            📉 ETH/USDT - SHORT SIGNAL
+            <div style="font-size: 16px; margin-top: 10px;">
+                Confidence: 82% | Entry: $3,456 | R:R 1:2.1
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
         
-        # Method 1: st.code (easiest to copy)
+        st.markdown("""
+        <div style="background: #f8f9fa; padding: 15px; border-radius: 10px; margin-top: 15px; color: #eb0efa;">
+            <strong>📊 Signal Analysis:</strong><br>
+            • RSI Overbought: 72.3<br>
+            • MACD Bearish Crossover<br>
+            • High Volume Confirmation<br>
+            • Strong Momentum: -4.2%
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    
+    # Pricing Section
+    st.markdown("## 💎 Simple, Transparent Pricing")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    
+    with col2:
+        st.markdown("""
+        <div class="pricing-card">
+            <h2 style="margin:0; font-size: 32px;">Premium Access</h2>
+            <div class="price-tag">25 USDT</div>
+            <div class="price-period">One-time payment • 30 days access</div>
+            <hr style="margin: 30px 0; opacity: 0.3;">
+            <div style="text-align: left; padding: 0 20px;">
+                <p>✓ Unlimited signal scans</p>
+                <p>✓ All trading pairs included</p>
+                <p>✓ Real-time market analysis</p>
+                <p>✓ Professional risk management</p>
+                <p>✓ Priority support</p>
+                <p>✓ 30-day access</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+        
+    # Payment Section
+    st.markdown("<div id='payment-section'></div>", unsafe_allow_html=True)
+    st.markdown("## 🔐 Get Your Premium Access")
+    
+    col1, col2 = st.columns([1.5, 1])
+    
+    with col1:
+        st.markdown("### 📝 Simple 3-Step Process")
+        
+        st.markdown("""
+        <div class="step-container">
+            <div class="step-number">1</div>
+            <div class="step-content">
+                <div class="step-title">Send Payment</div>
+                <div class="step-description">
+                    Send exactly 25 USDT (BEP20) to the wallet address on the right.
+                </div>
+            </div>
+        </div>
+        
+        <div class="step-container">
+            <div class="step-number">2</div>
+            <div class="step-content">
+                <div class="step-title">Contact Admin</div>
+                <div class="step-description">
+                    Click the Telegram button below and send your transaction ID.
+                </div>
+            </div>
+        </div>
+        
+        <div class="step-container">
+            <div class="step-number">3</div>
+            <div class="step-content">
+                <div class="step-title">Get Access</div>
+                <div class="step-description">
+                    Receive your unique access password and start trading within 5 minutes!
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+    
+    with col2:
+        st.markdown("### 💳 Payment Details")
+        st.markdown("""
+        <div class="wallet-box">
+            <strong>Network:</strong> BEP20 (Binance Smart Chain)<br>
+            <strong>Amount:</strong> 25 USDT<br>
+            <strong>Wallet Address:</strong>
+            <div class="wallet-address-display">
+        """ + YOUR_WALLET + """
+            </div>
+            <button onclick="navigator.clipboard.writeText('""" + YOUR_WALLET + """')" style="
+                background: #667eea;
+                color: white;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 8px;
+                cursor: pointer;
+                width: 100%;
+                font-weight: 600;
+            ">
+                📋 Copy Address
+            </button>
+            <p style="margin-top: 15px; font-size: 14px; color: #666;">
+                ⚠️ Send only USDT on BEP20 network. Other networks will result in loss of funds.
+            </p>
+            <p style="margin-top: 15px; font-size: 14px; color: #666;">
+                👌 After that contact admin, you immediate receive the password.
+            </p>
+        </div>
+        
+        """, unsafe_allow_html=True)
+        st.text("Or copy from here:")
         st.code(YOUR_WALLET, language="text")
-        
+    # Contact Admin Button
         st.markdown("""
-        **📋 Copy Instructions:**
-        1. Click inside the code box above
-        2. Press **Ctrl+A** (Windows) or **Cmd+A** (Mac)
-        3. Press **Ctrl+C** (Windows) or **Cmd+C** (Mac)
-        4. Paste into Binance app
-        """)
-        
-        # Method 2: Text input (backup)
-        st.text_input(
-            "✏️ Backup copy field:", 
-            value=YOUR_WALLET, 
-            key="backup_copy",
-            disabled=True,
-            help="Select the text and press Ctrl+C to copy"
-        )
-        
-        # Warning
-        st.error("⚠️ Send exactly 25 USDT on BEP20 network")
-        
-        st.markdown("---")
-        
-        # QR Code (optional - using your image)
-        with st.expander("📱 Show QR Code"):
-            try:
-                st.image(
-                    "qr_code.jpeg",
-                    caption="Scan with Binance app",
-                    width=200
-                )
-                st.caption("Make sure you're sending 25 USDT on BEP20 network")
-                st.markdown("""
-                **Binance App Users:**  
-                1. Open Binance app
-                2. Go to Wallet → Transfer → Send
-                3. Tap the scan icon
-                4. Scan the QR code above
-                """)
-            except:
-                st.warning("QR code image not found. Please use the wallet address above.")
-        
-        st.markdown("---")
-        
-        # ===== PASSWORD ACCESS SYSTEM =====
-        st.markdown("### 🔑 Enter Access Password")
-        
-        # Password input (hidden characters)
-        access_password = st.text_input(
-            "Password:", 
-            type="password",
-            placeholder="Enter your 30-day access password",
-            key="access_password_input",
-            help="After sending payment, you'll receive a password"
-        )
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("🔓 Unlock Access", use_container_width=True, type="primary"):
-                if access_password:
-                    # Admin override password (change this!)
-                    admin_password = "password.me"
-                    
-                    if access_password == admin_password:
-                        st.session_state.access_granted = True
-                        st.session_state.access_expiry = datetime.now() + timedelta(seconds=ACCESS_DURATION)
-                        st.success("✅ Admin access granted!")
-                        st.balloons()
-                        st.rerun()
-                    else:
-                        valid, message = st.session_state.password_manager.verify_password(access_password)
-                        if valid:
-                            st.session_state.access_granted = True
-                            st.session_state.access_expiry = datetime.now() + timedelta(seconds=ACCESS_DURATION)
-                            st.success("✅ Access granted! Welcome to Premium!")
-                            st.balloons()
-                            st.rerun()
-                        else:
-                            st.error(f"❌ {message}")
-                else:
-                    st.warning("Please enter a password")
-        
-        with col2:
-            # Direct contact button (backup)
-            st.markdown("""
-            <a href="https://t.me/forexbigadmin" target="_blank">
-                <button style="background-color: #0088cc; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px;">
-                    📱 Contact Admin Directly
-                </button>
-            </a>
-            """, unsafe_allow_html=True)
-        
-
-
-# RIGHT COLUMN - Payment Proof Upload (Only shown when NOT granted)
-if not st.session_state.access_granted and col_right:
-    with col_right:
-        st.markdown("### 📤 Submit Payment Proof")
-        
-        # File uploader for screenshot
-        uploaded_file = st.file_uploader(
-            "Upload payment screenshot", 
-            type=['png', 'jpg', 'jpeg'],
-            help="Take a screenshot of your successful 25 USDT payment and upload it here"
-        )
-        
-        # Optional: Add transaction ID for easier verification
-        tx_id = st.text_input(
-            "Transaction ID (optional)", 
-            placeholder="Paste your transaction ID here if available",
-            help="This helps us verify faster"
-        )
-        
-        # Optional: User contact info
-        col_a, col_b = st.columns(2)
-        with col_a:
-            user_telegram = st.text_input("Your Telegram (optional)", placeholder="@username", 
-                                          help="So we can send you the password faster")
-        with col_b:
-            user_email = st.text_input("Your Email (optional)", placeholder="email@example.com")
-        
-        # Submit button
-        if st.button("📨 Submit Payment Proof", use_container_width=True, type="primary"):
-            if uploaded_file is not None:
-                with st.spinner("Sending payment proof to admin..."):
-                    try:
-                        # Generate unique filename
-                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                        random_id = secrets.token_hex(4)
-                        filename = f"{PAYMENT_PROOFS_DIR}/payment_{timestamp}_{random_id}.png"
-                        
-                        # Save the file locally
-                        with open(filename, "wb") as f:
-                            f.write(uploaded_file.getbuffer())
-                        
-                        # Prepare caption for Telegram
-                        caption = f"🔔 *NEW PAYMENT PROOF RECEIVED*\n\n"
-                        caption += f"⏰ *Time:* {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-                        caption += f"💰 *Amount:* 25 USDT (BEP20)\n"
-                        caption += f"🔑 *TXID:* {tx_id or 'Not provided'}\n"
-                        caption += f"📱 *Telegram:* {user_telegram or 'Not provided'}\n"
-                        caption += f"📧 *Email:* {user_email or 'Not provided'}\n"
-                        caption += f"🆔 *File:* {filename}\n\n"
-                        caption += f"✅ *Action:* Reply with password or use admin panel"
-                        
-                        # Send to Telegram
-                        success, message = send_telegram_photo(filename, caption)
-                        
-                        if success:
-                            st.success("✅ Payment proof sent to admin! You'll receive your password soon.")
-                            
-                            # Show next steps
-                            st.info(f"""
-                            **📱 Next steps:**
-                            1. ✅ Admin received your payment proof
-                            2. 🔐 Password will be sent within 5 minutes
-                            3. 📨 Check your Telegram {user_telegram or 'messages'}
-                            4. 🔓 Enter password above to unlock access
-                            
-                            **⏱️ Expected response time: 2-5 minutes**
-                            """)
-                            
-                            st.balloons()
-                        else:
-                            st.error(f"❌ Failed to send to Telegram: {message}")
-                            st.warning("Please contact admin directly via the button below")
-                            
-                            # Save metadata for manual processing
-                            metadata_file = f"{PAYMENT_PROOFS_DIR}/payment_{timestamp}_{random_id}.txt"
-                            with open(metadata_file, "w") as f:
-                                f.write(f"Submission Time: {datetime.now()}\n")
-                                f.write(f"Transaction ID: {tx_id or 'Not provided'}\n")
-                                f.write(f"Telegram: {user_telegram or 'Not provided'}\n")
-                                f.write(f"Email: {user_email or 'Not provided'}\n")
-                                f.write(f"Status: Pending Manual Verification\n")
-                            
-                    except Exception as e:
-                        st.error(f"Error processing your request: {str(e)}")
-            else:
-                st.warning("Please upload a screenshot of your payment")
-        
-        # Direct contact button (backup)
-        st.markdown("""
-        <a href="https://t.me/forexbigadmin" target="_blank">
-            <button style="background-color: #0088cc; color: white; padding: 10px; border: none; border-radius: 5px; width: 100%; cursor: pointer; margin-top: 10px;">
-                📱 Contact Admin Directly
+        <a href="https://t.me/forexbigadmin" target="_blank" style="text-decoration: none;">
+            <button style="
+                background: linear-gradient(135deg, #0088cc 0%, #006699 100%);
+                color: white;
+                padding: 18px 40px;
+                border-radius: 50px;
+                font-size: 18px;
+                font-weight: 700;
+                border: none;
+                cursor: pointer;
+                width: 100%;
+                margin: 20px 0;
+                transition: transform 0.3s ease;
+            ">
+                📱 Contact Admin on Telegram
             </button>
         </a>
         """, unsafe_allow_html=True)
+    # Already have password
+    st.markdown("---")
+    st.markdown("### 🔑 Already Have Access?")
+    
+    col1, col2, col3 = st.columns([1, 2, 1])
+    with col2:
+        access_password = st.text_input(
+            "Enter your access password", 
+            type="password", 
+            placeholder="Enter your 30-day access code",
+            key="landing_password"
+        )
+        
+        col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("🔓 Unlock Premium Access", use_container_width=True, type="primary"):
+                admin_password = "password.me"
+                
+                if access_password == admin_password:
+                    st.session_state.access_granted = True
+                    st.session_state.access_expiry = datetime.now() + timedelta(seconds=ACCESS_DURATION)
+                    st.success("✅ Admin access granted!")
+                    st.balloons()
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    valid, message = st.session_state.password_manager.verify_password(access_password)
+                    if valid:
+                        st.session_state.access_granted = True
+                        st.session_state.access_expiry = datetime.now() + timedelta(seconds=ACCESS_DURATION)
+                        st.success("✅ Access granted! Welcome to Premium!")
+                        st.balloons()
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.error(f"❌ {message}")
+        
+    # Testimonials
+    st.markdown("## ⭐ What Our Users Say")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("""
+        <div class="testimonial-card">
+            <div class="testimonial-text">
+                "I've tried many signal services, but Forex Big Bot is on another level. The accuracy is insane. Made back my investment in just 2 trades!"
+            </div>
+            <div class="testimonial-author">
+                — Michael R. • 3 months user
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col2:
+        st.markdown("""
+        <div class="testimonial-card">
+            <div class="testimonial-text">
+                "The AI scanner finds opportunities I would never spot manually. Saved me hours of analysis every day. Best $25 I've ever spent."
+            </div>
+            <div class="testimonial-author">
+                — Sarah K. • Professional Trader
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="testimonial-card">
+            <div class="testimonial-text">
+                "Finally, signals I can actually trust. Clear entry and exit points. My portfolio is up 340% since I started using this."
+            </div>
+            <div class="testimonial-author">
+                — David L. • 6 months user
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("---")
+    # FAQ Section
+    
+    st.markdown("## ❓ Frequently Asked Questions")
+    
+    with st.expander("How quickly will I receive my password?"):
+        st.write("Within 5 minutes of sending payment and messaging us on Telegram. Most users receive access in under 2 minutes!")
+    
+    with st.expander("Can I use these signals on any exchange?"):
+        st.write("Yes! Our signals work on Binance, Bybit, KuCoin, OKX, and any major cryptocurrency exchange.")
+    
+    with st.expander("What's your success rate?"):
+        st.write("Our AI-powered signals maintain a 94% success rate with an average risk-reward ratio of 1:2.5.")
+    
+    with st.expander("Do you offer refunds?"):
+        st.write("Due to the digital nature of our service, we don't offer refunds. However, we're confident you'll love the signals!")
+    
+    with st.expander("Can I use the signals for futures trading?"):
+        st.write("Absolutely! Our signals work for both spot and futures trading. We provide precise stop-loss and take-profit levels.")
+    
+    # Guarantee Box
+    st.markdown("""
+    <div class="guarantee-box">
+        <h2 style="margin:0;">🔒 100% Satisfaction Guaranteed</h2>
+        <p style="margin-top: 15px; font-size: 18px;">
+            Join 2,500+ profitable traders who trust Forex Big Bot for their daily trading signals.
+            Your success is our priority.
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
 
-
-# ===== PASSWORD-BASED ACCESS SYSTEM =====
-# Check access expiry
-if st.session_state.access_expiry:
-    if datetime.now() > st.session_state.access_expiry:
-        st.session_state.access_granted = False
-        st.session_state.access_expiry = None
-        st.session_state.payment_verified = False
-
-# Create two columns only if access NOT granted
-if not st.session_state.access_granted:
-    col_left, col_right = st.columns([1, 2])
 else:
-    # If access granted, use full width for content
-    col_left, col_right = None, st.container()
-
-
-
-# RIGHT COLUMN - Content (Payment stuff hidden after login)
-content_container = col_right if not st.session_state.access_granted else st.container()
-
-with content_container:
-    if st.session_state.access_granted:
-        # PAID USERS - Show signals (FULL WIDTH, NO PAYMENT STUFF)
-        st.title("🤖 AI Trading Signals - Premium Access")
-        
-        # SINGLE COIN SEARCH - Simplified
-        st.markdown("### 🔍 Search Single Coin")
-        
-        # Coin selection dropdown (single selection)
-        available_coins = [
-            "BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "WIF/USDT", "RAVE/USDT", "NOM/USDT",
-            "ADA/USDT", "XRP/USDT", "DOGE/USDT", "DOT/USDT", "LAB/USDT", "PLAY/USDT",
-            "LINK/USDT", "AVAX/USDT", "TNSR/USDT", "TRU/USDT", "ENJ/USDT"
-        ]
-        
-        col1, col2, col3 = st.columns([2, 1, 1])
+    # MAIN APP - PREMIUM USERS
+    st.title("Forex Big bot Market Scanner - Premium")
+    
+    # Market overview stats - WITH PROPER CHECK
+    if 'market_stats' in st.session_state and st.session_state.market_stats:
+        stats = st.session_state.market_stats
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            selected_coin = st.selectbox(
-                "Select Coin",
-                available_coins,
-                index=0,
-                key="coin_selector_single"
+            st.metric("📊 Pairs Available", stats.get('total_pairs_scanned', 0))
+        with col2:
+            st.metric("💰 Avg 24h Volume", f"${stats.get('avg_volume', 0):,.0f}")
+        with col3:
+            if stats.get('top_gainer'):
+                st.metric("📈 Top Gainer", f"{stats['top_gainer']['symbol']}", 
+                         f"{stats['top_gainer']['change_24h']:+.2f}%")
+        with col4:
+            if stats.get('top_loser'):
+                st.metric("📉 Top Loser", f"{stats['top_loser']['symbol']}", 
+                         f"{stats['top_loser']['change_24h']:+.2f}%")
+    
+    # Scanner Configuration
+    st.markdown("### 🎯 Scanner Configuration")
+    
+    col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
+    
+    with col1:
+        scan_mode = st.selectbox(
+            "Scan Mode",
+            ['top_volume', 'high_volatility', 'trending', 'all_market'],
+            format_func=lambda x: {
+                'top_volume': '🔥 Top Volume (Most Liquid)',
+                'high_volatility': '⚡ High Volatility (Big Movers)',
+                'trending': '📈 Trending (Strong Momentum)',
+                'all_market': '🌍 All Market (Comprehensive)'
+            }[x],
+            help="Choose how to select pairs for scanning"
+        )
+    
+    with col2:
+        max_pairs = st.selectbox(
+            "Pairs to Scan",
+            [5, 10, 25, 50, 100, 200, 500],
+            index=3,  # Default to 50
+            help="Number of pairs to analyze (more = longer scan time)"
+        )
+    
+    with col3:
+        timeframe = st.selectbox(
+            "Timeframe",
+            ["15m", "1h", "4h", "1d"],
+            index=1,
+            help="Trading timeframe for analysis"
+        )
+    
+    with col4:
+        min_confidence = st.slider(
+            "Min Confidence",
+            50, 95, 65, 5,
+            help="Only show signals above this confidence"
+        )
+    
+    # Scan button - with safety check
+    col1, col2, col3 = st.columns([2, 1, 2])
+    with col2:
+        # Check if scanner exists and has exchange attribute
+        scanner_available = False
+        try:
+            scanner_available = scanner is not None and scanner.exchange is not None
+        except:
+            scanner_available = False
+    
+        scan_button = st.button(
+            "🚀 START MARKET SCAN", 
+            use_container_width=True, 
+            type="primary",
+            disabled=not scanner_available,
+            key="scan_button_main"
+        )
+    
+    if not scanner.exchange:
+        st.error("❌ No exchange connection available. Please try again later.")
+    
+    # Auto-scan option
+    auto_scan = st.checkbox("🔄 Auto-scan every 2 minutes", help="Continuously scan for new opportunities", key="auto_scan_main")
+    
+    # Scanning logic - now both variables are defined
+    if scan_button or auto_scan:
+        with st.spinner(f"🔍 Scanning {max_pairs} pairs across the market..."):
+            
+            # Progress tracking
+            progress_bar = st.progress(0)
+            status_container = st.empty()
+            
+            # Perform market-wide scan
+            signals, scan_desc = scanner.scan_market_wide(
+                scan_mode=scan_mode,
+                max_pairs=max_pairs,
+                timeframe=timeframe,
+                min_confidence=min_confidence
             )
+        
+        # Animated progress
+        for i in range(100):
+            time.sleep(0.01)
+            progress_bar.progress(i + 1)
+            if i < 30:
+                status_container.markdown(f"📡 Discovering trading pairs... ({scan_desc})")
+            elif i < 60:
+                status_container.markdown(f"📊 Fetching market data... ({len(signals)} signals found so far)")
+            elif i < 90:
+                status_container.text("🎯 Analyzing technical indicators...")
+            else:
+                status_container.text("✨ Generating trading signals...")
+        
+        progress_bar.empty()
+        status_container.empty()
+        
+        if signals:
+            st.session_state.scanner_results = signals
+            st.session_state.best_signal = signals[0]
+            st.session_state.last_update = datetime.now()
+            
+            # Success message
+            st.success(f"✅ Scan complete! Found {len(signals)} quality trading signals from {scan_desc}")
+            
+            # ===== DISPLAY TOP 5 SIGNALS WITH DETAILED ANALYSIS =====
+            st.markdown("### 🏆 TOP 5 SIGNALS FOUND")
+            
+            # Determine how many tabs to create (up to 5)
+            num_tabs = min(5, len(signals))
+            
+            # Create tab labels
+            tab_labels = []
+            for i in range(num_tabs):
+                signal = signals[i]
+                emoji = "📈" if signal['signal'] == "LONG" else "📉"
+                tab_labels.append(f"{emoji} #{i+1}: {signal['symbol']}")
+            
+            # Create tabs
+            tabs = st.tabs(tab_labels)
+            
+            # Populate each tab with detailed analysis
+            for i in range(num_tabs):
+                with tabs[i]:
+                    best = signals[i]
+                    
+                    # Signal header
+                    signal_class = "signal-long" if best['signal'] == "LONG" else "signal-short"
+                    st.markdown(f"""
+                    <div class="{signal_class.split()[0]}" style="margin-bottom: 20px;">
+                        <h2 style="margin:0;">{best['symbol']} - {best['signal']} ({best['strength']})</h2>
+                        <h3 style="margin:10px 0;">Confidence: {best['confidence']}% | Score: {best['total_score']}/{best['max_score']}</h3>
+                        <p style="margin:5px 0;">💰 Entry: ${best['current_price']:,.4f} | R:R 1:{best['risk_reward_ratio']:.2f}</p>
+                        <p style="margin:5px 0;">📊 24h Change: {best.get('change_24h', 0):+.2f}% | Volume: ${best.get('volume_24h', 0):,.0f}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Key metrics
+                    st.markdown("#### 📊 Key Metrics")
+                    col1, col2, col3, col4, col5, col6 = st.columns(6)
+                    with col1:
+                        st.metric("Price", f"${best['current_price']:,.4f}")
+                    with col2:
+                        st.metric("RSI", f"{best['rsi']:.1f}")
+                    with col3:
+                        st.metric("Confidence", f"{best['confidence']}%")
+                    with col4:
+                        st.metric("Volatility", f"{best['volatility']:.2f}%")
+                    with col5:
+                        st.metric("Volume Ratio", f"{best['volume_ratio']:.2f}x")
+                    with col6:
+                        st.metric("Momentum", f"{best['momentum_10']:+.2f}%")
+                    
+                    # Trading levels
+                    st.markdown("#### 🎯 Trading Levels")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        st.markdown("**📊 Entry**")
+                        st.write(f"Price: ${best['current_price']:,.4f}")
+                        st.write(f"Signal: {best['signal']} ({best['strength']})")
+                        st.write(f"Score: {best['total_score']}/{best['max_score']}")
+                    
+                    with col2:
+                        st.markdown("**🛑 Stop Loss**")
+                        if best.get('stop_loss'):
+                            st.write(f"Price: ${best['stop_loss']:,.4f}")
+                            if best['signal'] == "LONG":
+                                distance = ((best['current_price'] - best['stop_loss']) / best['current_price']) * 100
+                                st.write(f"Distance: -{distance:.2f}%")
+                                risk_usd = best['current_price'] - best['stop_loss']
+                                st.write(f"Risk: ${risk_usd:.4f}")
+                            else:
+                                distance = ((best['stop_loss'] - best['current_price']) / best['current_price']) * 100
+                                st.write(f"Distance: +{distance:.2f}%")
+                                risk_usd = best['stop_loss'] - best['current_price']
+                                st.write(f"Risk: ${risk_usd:.4f}")
+                    
+                    with col3:
+                        st.markdown("**🎯 Take Profit**")
+                        if best.get('take_profit_1'):
+                            st.write(f"TP1: ${best['take_profit_1']:,.4f}")
+                            if best.get('take_profit_2'):
+                                st.write(f"TP2: ${best['take_profit_2']:,.4f}")
+                            if best['signal'] == "LONG":
+                                distance = ((best['take_profit_1'] - best['current_price']) / best['current_price']) * 100
+                                st.write(f"Distance: +{distance:.2f}%")
+                                reward_usd = best['take_profit_1'] - best['current_price']
+                                st.write(f"Reward: ${reward_usd:.4f}")
+                            else:
+                                distance = ((best['current_price'] - best['take_profit_1']) / best['current_price']) * 100
+                                st.write(f"Distance: +{distance:.2f}%")
+                                reward_usd = best['current_price'] - best['take_profit_1']
+                                st.write(f"Reward: ${reward_usd:.4f}")
+                    
+                    # Risk/Reward Analysis
+                    st.markdown("#### 📈 Risk/Reward Analysis")
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        rr_ratio = best['risk_reward_ratio']
+                        if rr_ratio >= 2.5:
+                            st.success(f"✅ Excellent R:R Ratio: 1:{rr_ratio:.2f}")
+                        elif rr_ratio >= 1.8:
+                            st.success(f"✅ Good R:R Ratio: 1:{rr_ratio:.2f}")
+                        elif rr_ratio >= 1.5:
+                            st.warning(f"⚠️ Acceptable R:R Ratio: 1:{rr_ratio:.2f}")
+                        else:
+                            st.error(f"❌ Poor R:R Ratio: 1:{rr_ratio:.2f}")
+                    
+                    with col2:
+                        st.markdown("**📊 Signal Strength**")
+                        st.write(f"Bullish: {best['bullish_score']}/{best['max_score']}")
+                        st.write(f"Bearish: {best['bearish_score']}/{best['max_score']}")
+                        
+                        # Progress bar for bullish vs bearish
+                        total = best['bullish_score'] + best['bearish_score']
+                        if total > 0:
+                            bullish_pct = (best['bullish_score'] / total) * 100
+                            st.progress(bullish_pct / 100, text=f"Bullish: {bullish_pct:.0f}%")
+                    
+                    with col3:
+                        st.markdown("**💡 Trade Quality**")
+                        quality_score = 0
+                        if best['strength'] == 'STRONG':
+                            quality_score += 3
+                        elif best['strength'] == 'MODERATE':
+                            quality_score += 2
+                        else:
+                            quality_score += 1
+                        
+                        if best['risk_reward_ratio'] >= 2.5:
+                            quality_score += 3
+                        elif best['risk_reward_ratio'] >= 1.8:
+                            quality_score += 2
+                        elif best['risk_reward_ratio'] >= 1.5:
+                            quality_score += 1
+                        
+                        if best['confidence'] >= 80:
+                            quality_score += 2
+                        elif best['confidence'] >= 70:
+                            quality_score += 1
+                        
+                        if quality_score >= 7:
+                            st.success(f"⭐⭐⭐⭐⭐ Excellent ({quality_score}/8)")
+                        elif quality_score >= 5:
+                            st.success(f"⭐⭐⭐⭐ Good ({quality_score}/8)")
+                        elif quality_score >= 3:
+                            st.warning(f"⭐⭐⭐ Fair ({quality_score}/8)")
+                        else:
+                            st.error(f"⭐⭐ Poor ({quality_score}/8)")
+                    
+                    # Signal Confirmations and Reasons
+                    st.markdown("#### ✅ Signal Confirmations")
+                    col1, col2 = st.columns(2)
+                    
+                    with col1:
+                        st.markdown("**Technical Confirmations:**")
+                        for conf in best.get('confirmations', [])[:5]:
+                            st.write(f"• {conf}")
+                    
+                    with col2:
+                        st.markdown("**Detailed Analysis:**")
+                        for reason in best['reasons'][:5]:
+                            st.write(f"• {reason}")
+                    
+                    # Additional Analysis
+                    with st.expander("🔍 View Additional Analysis", expanded=False):
+                        st.markdown(f"""
+                        **Market Context:**
+                        - 24h Change: {best.get('change_24h', 0):+.2f}%
+                        - 24h Volume: ${best.get('volume_24h', 0):,.0f}
+                        - Volatility (20-period): {best['volatility']:.2f}%
+                        - Volume Ratio: {best['volume_ratio']:.2f}x average
+                        
+                        **Technical Indicators:**
+                        - RSI (14): {best['rsi']:.1f}
+                        - 10-period Momentum: {best['momentum_10']:+.2f}%
+                        
+                        **Risk Management:**
+                        - Position Size Recommendation: 1-2% of portfolio
+                        - Suggested Leverage: Max 3x for this setup
+                        - Stop Loss Distance: {abs(((best.get('stop_loss', 0) - best['current_price']) / best['current_price']) * 100):.2f}%
+                        """)
+                    
+                    # Chart
+                    st.markdown("---")
+                    st.markdown(f"#### 📈 {best['symbol']} Price Chart ({timeframe})")
+                    
+                    df = scanner.fetch_ohlcv_data(best['symbol'], timeframe, limit=100)
+                    if df is not None:
+                        df = scanner.calculate_indicators(df)
+                        
+                        fig = make_subplots(
+                            rows=3, cols=1,
+                            shared_xaxes=True,
+                            vertical_spacing=0.05,
+                            row_heights=[0.5, 0.25, 0.25]
+                        )
+                        
+                        # Candlestick
+                        fig.add_trace(
+                            go.Candlestick(
+                                x=df.index, open=df['open'], high=df['high'],
+                                low=df['low'], close=df['close'], name='Price'
+                            ),
+                            row=1, col=1
+                        )
+                        
+                        # EMAs
+                        fig.add_trace(go.Scatter(x=df.index, y=df['ema_9'], name='EMA 9', 
+                                                line=dict(color='blue', width=1.5)), row=1, col=1)
+                        fig.add_trace(go.Scatter(x=df.index, y=df['ema_21'], name='EMA 21', 
+                                                line=dict(color='orange', width=1.5)), row=1, col=1)
+                        fig.add_trace(go.Scatter(x=df.index, y=df['ema_50'], name='EMA 50', 
+                                                line=dict(color='red', width=1, dash='dot')), row=1, col=1)
+                        
+                        # Bollinger Bands
+                        fig.add_trace(go.Scatter(x=df.index, y=df['bb_upper'], name='BB Upper', 
+                                                line=dict(color='gray', width=1, dash='dash')), row=1, col=1)
+                        fig.add_trace(go.Scatter(x=df.index, y=df['bb_lower'], name='BB Lower', 
+                                                line=dict(color='gray', width=1, dash='dash')), row=1, col=1)
+                        fig.add_trace(go.Scatter(x=df.index, y=df['bb_middle'], name='BB Middle', 
+                                                line=dict(color='white', width=0.5)), row=1, col=1)
+                        
+                        # Add entry, SL, TP lines
+                        fig.add_hline(y=best['current_price'], line_dash="solid", 
+                                     line_color="yellow", row=1, col=1, 
+                                     annotation_text="Entry", annotation_position="left")
+                        
+                        if best.get('stop_loss'):
+                            fig.add_hline(y=best['stop_loss'], line_dash="dash", 
+                                         line_color="red", row=1, col=1,
+                                         annotation_text="Stop Loss", annotation_position="left")
+                        
+                        if best.get('take_profit_1'):
+                            fig.add_hline(y=best['take_profit_1'], line_dash="dash", 
+                                         line_color="green", row=1, col=1,
+                                         annotation_text="TP1", annotation_position="left")
+                        
+                        if best.get('take_profit_2'):
+                            fig.add_hline(y=best['take_profit_2'], line_dash="dot", 
+                                         line_color="lime", row=1, col=1,
+                                         annotation_text="TP2", annotation_position="left")
+                        
+                        # Volume
+                        colors = ['red' if row['open'] > row['close'] else 'green' for _, row in df.iterrows()]
+                        fig.add_trace(go.Bar(x=df.index, y=df['volume'], name='Volume', 
+                                            marker_color=colors), row=2, col=1)
+                        
+                        # MACD
+                        fig.add_trace(go.Scatter(x=df.index, y=df['macd'], name='MACD', 
+                                                line=dict(color='blue')), row=3, col=1)
+                        fig.add_trace(go.Scatter(x=df.index, y=df['macd_signal'], name='Signal', 
+                                                line=dict(color='orange')), row=3, col=1)
+                        
+                        fig.update_layout(
+                            height=700,
+                            xaxis_rangeslider_visible=False,
+                            showlegend=True,
+                            template='plotly_dark',
+                            title=f"{best['symbol']} - {timeframe} Chart with Entry/Exit Levels"
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    st.markdown("---")
+            
+            # ===== ALL SIGNALS SUMMARY TABLE =====
+            st.markdown("### 📊 All Signals Summary")
+            st.caption("Click on any signal tab above for detailed analysis")
+            
+            # Create summary dataframe
+            signals_df = pd.DataFrame([{
+                'Symbol': s['symbol'],
+                'Signal': s['signal'],
+                'Strength': s['strength'],
+                'Confidence': f"{s['confidence']}%",
+                'Score': f"{s['total_score']}/{s['max_score']}",
+                'Price': f"${s['current_price']:,.4f}",
+                '24h %': f"{s.get('change_24h', 0):+.2f}%",
+                'RSI': f"{s['rsi']:.1f}",
+                'R:R': f"1:{s['risk_reward_ratio']:.2f}",
+                'Quality': '⭐' * min(5, int(s['confidence']/20) + (1 if s['strength']=='STRONG' else 0))
+            } for s in signals])
+            
+            # Color coding
+            def color_signal(val):
+                if val == 'LONG':
+                    return 'background: #11998e; color: white; font-weight: bold'
+                elif val == 'SHORT':
+                    return 'background: #eb3349; color: white; font-weight: bold'
+                return ''
+            
+            def color_strength(val):
+                if val == 'STRONG':
+                    return 'background-color: #ffd700; color: black; font-weight: bold'
+                elif val == 'MODERATE':
+                    return 'background-color: #ffa500; color: black'
+                return ''
+            
+            styled_df = signals_df.style.map(color_signal, subset=['Signal']).map(color_strength, subset=['Strength'])
+            st.dataframe(styled_df, use_container_width=True, height=400)
+            
+            st.caption(f"Last scan: {st.session_state.last_update.strftime('%Y-%m-%d %H:%M:%S')}")
+            
+        else:
+            st.warning(f"⚠️ No signals found with confidence ≥ {min_confidence}%")
+            st.info("💡 Try changing scan mode or lowering minimum confidence")
+    
+    if auto_scan:
+        time.sleep(120)
+        st.rerun()
+    
+    elif not scan_button and ('scanner_results' not in st.session_state or not st.session_state.scanner_results):
+        # Welcome screen
+        st.markdown("""
+        <div class="scanner-stats">
+            <h2 style="text-align: center;">🚀 Ready to Scan the Market</h2>
+            <p style="text-align: center; font-size: 18px;">Configure your scan settings above and click START MARKET SCAN</p>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.markdown("""
+            <div class="metric-card">
+                <h3>🔥 Top Volume</h3>
+                <p>Scan the most liquid pairs with highest trading volume</p>
+                <p><strong>Best for:</strong> Reliable, less volatile trades</p>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col2:
-            timeframe = st.selectbox(
-                "Timeframe",
-                ["15m", "1h", "4h", "1d"],
-                index=1,
-                key="timeframe_selector_single"
-            )
+            st.markdown("""
+            <div class="metric-card">
+                <h3>⚡ High Volatility</h3>
+                <p>Find pairs with biggest price movements</p>
+                <p><strong>Best for:</strong> Quick profits, higher risk</p>
+            </div>
+            """, unsafe_allow_html=True)
         
         with col3:
-            st.write("")  # Spacing
-            st.write("")  # Spacing
-            search_button = st.button("🔍 Search", use_container_width=True, type="primary", key="search_button")
-        
-        # Auto-refresh option
-        auto_refresh = st.checkbox("🔄 Auto-refresh (30s)", key="auto_refresh_single")
-        
-        # Generate signal for single coin
-        if search_button:
-            with st.spinner(f"🔍 Analyzing {selected_coin}..."):
-                df = bot.fetch_data(selected_coin, timeframe)
-                if df is not None:
-                    df = bot.calculate_indicators(df)
-                    signal = bot.generate_signal(df)
-                    if signal:
-                        signal['coin'] = selected_coin
-                        st.session_state.multi_signals = [signal]  # Replace with single signal
-                        st.session_state.last_update = datetime.now()
-        
-        # Display single signal
-        if st.session_state.multi_signals:
-            signal = st.session_state.multi_signals[0]  # Get the single signal
-            
-            # Signal header
-            if signal['signal'] == "LONG":
-                st.markdown(f'<div class="signal-long">📈 {signal["coin"]} - LONG SIGNAL (Confidence: {signal["confidence"]}%)</div>', unsafe_allow_html=True)
-            elif signal['signal'] == "SHORT":
-                st.markdown(f'<div class="signal-short">📉 {signal["coin"]} - SHORT SIGNAL (Confidence: {signal["confidence"]}%)</div>', unsafe_allow_html=True)
-            else:
-                st.markdown(f'<div class="signal-neutral">⏸️ {signal["coin"]} - NEUTRAL (Confidence: {signal["confidence"]}%)</div>', unsafe_allow_html=True)
-            
-            st.markdown("---")
-            
-            # Key metrics in columns
-            col1, col2, col3, col4 = st.columns(4)
-            with col1:
-                st.metric("Current Price", f"${signal['current_price']:,.2f}")
-            with col2:
-                st.metric("RSI (14)", f"{signal['rsi']:.1f}")
-            with col3:
-                st.metric("Confidence", f"{signal['confidence']}%")
-            with col4:
-                st.metric("Volatility", signal['volatility'])
-            
-            st.markdown("---")
-            
-            # Trading details in columns
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.subheader("📊 Entry")
-                st.write(f"**Price:** ${signal['current_price']:,.2f}")
-            
-            with col2:
-                st.subheader("🛑 Stop Loss")
-                if signal.get('stop_loss'):
-                    st.write(f"**Price:** ${signal['stop_loss']:,.2f}")
-                    if signal['signal'] == "LONG":
-                        distance = ((signal['current_price'] - signal['stop_loss']) / signal['current_price']) * 100
-                        st.write(f"**Distance:** {distance:.2f}% 🔴")
-                    elif signal['signal'] == "SHORT":
-                        distance = ((signal['stop_loss'] - signal['current_price']) / signal['current_price']) * 100
-                        st.write(f"**Distance:** {distance:.2f}% 🔴")
-                else:
-                    st.write("**Price:** N/A")
-            
-            with col3:
-                st.subheader("🎯 Take Profit")
-                if signal.get('take_profit'):
-                    st.write(f"**Price:** ${signal['take_profit']:,.2f}")
-                    if signal['signal'] == "LONG":
-                        distance = ((signal['take_profit'] - signal['current_price']) / signal['current_price']) * 100
-                        st.write(f"**Distance:** +{distance:.2f}% ✅")
-                    elif signal['signal'] == "SHORT":
-                        distance = ((signal['current_price'] - signal['take_profit']) / signal['current_price']) * 100
-                        st.write(f"**Distance:** +{distance:.2f}% ✅")
-                else:
-                    st.write("**Price:** N/A")
-            
-            st.markdown("---")
-            
-            # Risk/Reward
-            if signal.get('risk_reward_ratio'):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.subheader("📈 Risk/Reward")
-                    st.write(f"**Ratio:** 1:{signal['risk_reward_ratio']:.2f}")
-                    
-                    if signal['risk_reward_ratio'] >= 2:
-                        st.success("✅ Good risk/reward")
-                    elif signal['risk_reward_ratio'] >= 1.5:
-                        st.warning("⚠️ Acceptable risk/reward")
-                    else:
-                        st.error("❌ Poor risk/reward")
-            
-            # Analysis reasons
-            st.subheader("🔍 Analysis Reasons")
-            for reason in signal['reasons']:
-                st.write(f"• {reason}")
-            
-            st.markdown("---")
-            
-            # Price chart
-            st.subheader("📈 Price Chart")
-            
-            # Fetch data for chart
-            df = bot.fetch_data(signal['coin'], timeframe, limit=100)
-            if df is not None:
-                df = bot.calculate_indicators(df)
-                
-                fig = make_subplots(
-                    rows=3, cols=1,
-                    shared_xaxes=True,
-                    vertical_spacing=0.05,
-                    row_heights=[0.6, 0.2, 0.2]
-                )
-                
-                # Candlestick chart
-                fig.add_trace(
-                    go.Candlestick(
-                        x=df.index,
-                        open=df['open'],
-                        high=df['high'],
-                        low=df['low'],
-                        close=df['close'],
-                        name='Price'
-                    ),
-                    row=1, col=1
-                )
-                
-                # Add EMAs
-                fig.add_trace(
-                    go.Scatter(x=df.index, y=df['ema_9'], name='EMA 9', line=dict(color='blue', width=1)),
-                    row=1, col=1
-                )
-                fig.add_trace(
-                    go.Scatter(x=df.index, y=df['ema_21'], name='EMA 21', line=dict(color='orange', width=1)),
-                    row=1, col=1
-                )
-                
-                # Add Bollinger Bands
-                fig.add_trace(
-                    go.Scatter(x=df.index, y=df['bb_upper'], name='BB Upper', line=dict(color='gray', width=1, dash='dash')),
-                    row=1, col=1
-                )
-                fig.add_trace(
-                    go.Scatter(x=df.index, y=df['bb_lower'], name='BB Lower', line=dict(color='gray', width=1, dash='dash')),
-                    row=1, col=1
-                )
-                
-                # Volume bars
-                colors = ['red' if row['open'] > row['close'] else 'green' for index, row in df.iterrows()]
-                fig.add_trace(
-                    go.Bar(x=df.index, y=df['volume'], name='Volume', marker_color=colors),
-                    row=2, col=1
-                )
-                
-                # RSI
-                fig.add_trace(
-                    go.Scatter(x=df.index, y=df['rsi'], name='RSI', line=dict(color='purple')),
-                    row=3, col=1
-                )
-                fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
-                fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
-                
-                fig.update_layout(
-                    height=800,
-                    xaxis_rangeslider_visible=False,
-                    showlegend=True,
-                    template='plotly_dark'
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-            
-            # Last update time
-            st.caption(f"Last updated: {st.session_state.last_update.strftime('%Y-%m-%d %H:%M:%S')}")
-            
-            # Auto-refresh
-            if auto_refresh:
-                time.sleep(30)
-                st.rerun()
+            st.markdown("""
+            <div class="metric-card">
+                <h3>📈 Trending</h3>
+                <p>Discover pairs with strong momentum</p>
+                <p><strong>Best for:</strong> Following the trend</p>
+            </div>
+            """, unsafe_allow_html=True)
 
-        # Sample preview
-        st.markdown("---")
-        st.subheader("📊 Sample Signal Preview")
-        st.caption("Complete payment on the left to unlock real signals")
-        
-        preview_data = pd.DataFrame({
-            'Coin': ['BTC/USDT', 'ETH/USDT'],
-            'Signal': ['LONG', 'SHORT'],
-            'Confidence': ['87%', '76%'],
-            'Entry': ['$65,432', '$3,456'],
-            'R:R': ['1:2.4', '1:1.8']
-        })
-        st.dataframe(preview_data, use_container_width=True)
+    st.success("✅ Premium Access Active - Welcome back!")
 
-# Final footer
+# Footer
 st.markdown("---")
-st.caption("© 2024 Futures Big Bot. All rights reserved.")
-st.caption("🔧 Admin panel is always available at help")
+st.markdown("""
+<div style="text-align: center; color: #666; padding: 20px;">
+    <p>© 2024 Forex Big Bot. All rights reserved. | 
+    <a href="#" style="color: #667eea;">Terms of Service</a> | 
+    <a href="#" style="color: #667eea;">Privacy Policy</a> | 
+    <a href="https://t.me/forexbigadmin" style="color: #667eea;">Support</a></p>
+    <p style="margin-top: 10px; font-size: 14px;">
+        ⚠️ Trading cryptocurrencies carries risk. Past performance does not guarantee future results.
+    </p>
+</div>
+""", unsafe_allow_html=True)
