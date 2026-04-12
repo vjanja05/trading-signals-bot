@@ -739,7 +739,7 @@ with content_container:
         available_coins = [
             "BTC/USDT", "ETH/USDT", "BNB/USDT", "SOL/USDT", "WIF/USDT", "RAVE/USDT", "NOM/USDT",
             "ADA/USDT", "XRP/USDT", "DOGE/USDT", "DOT/USDT", "LAB/USDT", "PLAY/USDT",
-            "LINK/USDT", "AVAX/USDT", "MATIC/USDT", "TNSR/USDT", "SEUL/USDT"
+            "LINK/USDT", "AVAX/USDT", "TNSR/USDT", "SEUL/USDT", "TRU/USDT", "BANK/USDT", "ENJ/USDT"
         ]
         
         col1, col2, col3 = st.columns([2, 1, 1])
