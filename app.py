@@ -55,6 +55,364 @@ class PasswordManager:
                 return False, "Password already used"
         return False, "Invalid password"
 
+class AdvancedMarketScanner:
+    """Advanced market scanner that dynamically discovers and analyzes trading pairs"""
+    
+    def __init__(self):
+        self.exchange = None
+        self.available_pairs = []
+        self.blacklisted_terms = ['DOWN', 'UP', 'BULL', 'BEAR', '3L', '3S', '5L', '5S', 'LEVERAGE']
+        self._init_exchange()
+        
+    def _init_exchange(self):
+        """Initialize the best available exchange"""
+        exchanges = [
+            ('binance', lambda: ccxt.binance({'enableRateLimit': True, 'options': {'defaultType': 'spot'}})),
+            ('bybit', lambda: ccxt.bybit({'enableRateLimit': True})),
+            ('kucoin', lambda: ccxt.kucoin({'enableRateLimit': True})),
+            ('okx', lambda: ccxt.okx({'enableRateLimit': True})),
+            ('gate', lambda: ccxt.gate({'enableRateLimit': True})),
+        ]
+        
+        for name, init_func in exchanges:
+            try:
+                self.exchange = init_func()
+                self.exchange.load_markets()
+                st.session_state['active_exchange'] = name
+                return
+            except:
+                continue
+                
+        st.error("No exchange connections available")
+    
+    def get_all_usdt_pairs(self, min_volume_usdt=1000000):
+        """Get all USDT trading pairs with volume filter"""
+        if not self.exchange:
+            return []
+        
+        pairs = []
+        
+        try:
+            markets = self.exchange.markets
+            
+            for symbol, market in markets.items():
+                # Filter for USDT pairs only
+                if symbol.endswith('/USDT') and market.get('active', True):
+                    # Skip leveraged tokens and weird pairs
+                    if any(term in symbol for term in self.blacklisted_terms):
+                        continue
+                    
+                    # Get 24h volume if available
+                    try:
+                        ticker = self.exchange.fetch_ticker(symbol)
+                        volume_usdt = ticker.get('quoteVolume', 0) or ticker.get('volume', 0) * ticker.get('last', 0)
+                        
+                        if volume_usdt >= min_volume_usdt:
+                            pairs.append({
+                                'symbol': symbol,
+                                'volume': volume_usdt,
+                                'price': ticker.get('last', 0),
+                                'change_24h': ticker.get('percentage', 0) or ticker.get('change', 0)
+                            })
+                    except:
+                        continue
+                        
+        except Exception as e:
+            st.warning(f"Error fetching pairs: {e}")
+            
+        # Sort by volume
+        pairs.sort(key=lambda x: x['volume'], reverse=True)
+        return pairs
+    
+    def get_top_volume_pairs(self, limit=100):
+        """Get top pairs by volume"""
+        all_pairs = self.get_all_usdt_pairs(min_volume_usdt=500000)
+        return all_pairs[:limit]
+    
+    def get_high_volatility_pairs(self, limit=50):
+        """Get pairs with highest 24h volatility"""
+        all_pairs = self.get_all_usdt_pairs(min_volume_usdt=1000000)
+        
+        # Sort by absolute percentage change
+        all_pairs.sort(key=lambda x: abs(x['change_24h']), reverse=True)
+        return all_pairs[:limit]
+    
+    def get_trending_pairs(self, limit=50):
+        """Get pairs with strong trends (up or down)"""
+        all_pairs = self.get_all_usdt_pairs(min_volume_usdt=2000000)
+        
+        # Filter for strong moves (>3%)
+        trending = [p for p in all_pairs if abs(p['change_24h']) > 3]
+        trending.sort(key=lambda x: abs(x['change_24h']), reverse=True)
+        return trending[:limit]
+    
+    def fetch_ohlcv_data(self, symbol, timeframe='1h', limit=100):
+        """Fetch OHLCV data"""
+        try:
+            ohlcv = self.exchange.fetch_ohlcv(symbol, timeframe, limit=limit)
+            df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
+            df.set_index('timestamp', inplace=True)
+            return df
+        except:
+            return None
+    
+    def calculate_indicators(self, df):
+        """Calculate technical indicators"""
+        if df is None or len(df) < 20:
+            return df
+        
+        try:
+            df['ema_9'] = ta.trend.ema_indicator(df['close'], window=9)
+            df['ema_21'] = ta.trend.ema_indicator(df['close'], window=21)
+            df['ema_50'] = ta.trend.ema_indicator(df['close'], window=50)
+            df['rsi'] = ta.momentum.rsi(df['close'], window=14)
+            
+            macd = ta.trend.MACD(df['close'])
+            df['macd'] = macd.macd()
+            df['macd_signal'] = macd.macd_signal()
+            df['macd_diff'] = macd.macd_diff()
+            
+            bb = ta.volatility.BollingerBands(df['close'], window=20, window_dev=2)
+            df['bb_upper'] = bb.bollinger_hband()
+            df['bb_middle'] = bb.bollinger_mavg()
+            df['bb_lower'] = bb.bollinger_lband()
+            
+            df['atr'] = ta.volatility.average_true_range(df['high'], df['low'], df['close'], window=14)
+            df['volatility'] = df['close'].pct_change().rolling(window=20).std() * 100
+            
+            # Additional indicators
+            df['volume_ratio'] = df['volume'] / df['volume'].rolling(window=20).mean()
+            df['price_position'] = (df['close'] - df['low'].rolling(window=20).min()) / (df['high'].rolling(window=20).max() - df['low'].rolling(window=20).min())
+            
+        except:
+            pass
+        
+        return df
+    
+    def generate_advanced_signal(self, df, symbol=""):
+        """Generate advanced trading signal with multiple confirmations"""
+        if df is None or len(df) < 50:
+            return None
+        
+        try:
+            latest = df.iloc[-1]
+            
+            bullish_score = 0
+            bearish_score = 0
+            reasons = []
+            confirmations = []
+            
+            # 1. EMA Trend Analysis (Weight: 4)
+            if not pd.isna(latest.get('ema_9')) and not pd.isna(latest.get('ema_21')):
+                if latest['ema_9'] > latest['ema_21']:
+                    bullish_score += 4
+                    reasons.append("📈 EMA 9/21 Bullish crossover")
+                    confirmations.append("EMA Trend: Bullish")
+                else:
+                    bearish_score += 4
+                    reasons.append("📉 EMA 9/21 Bearish crossover")
+                    confirmations.append("EMA Trend: Bearish")
+            
+            # 2. RSI Analysis (Weight: 5)
+            if not pd.isna(latest.get('rsi')):
+                if latest['rsi'] < 30:
+                    bullish_score += 5
+                    reasons.append(f"💪 Oversold RSI: {latest['rsi']:.1f}")
+                    confirmations.append(f"RSI Oversold: {latest['rsi']:.1f}")
+                elif latest['rsi'] > 70:
+                    bearish_score += 5
+                    reasons.append(f"⚠️ Overbought RSI: {latest['rsi']:.1f}")
+                    confirmations.append(f"RSI Overbought: {latest['rsi']:.1f}")
+                elif latest['rsi'] > 50:
+                    bullish_score += 2
+                else:
+                    bearish_score += 2
+            
+            # 3. MACD Analysis (Weight: 4)
+            if not pd.isna(latest.get('macd')) and not pd.isna(latest.get('macd_signal')):
+                if latest['macd'] > latest['macd_signal']:
+                    bullish_score += 4
+                    reasons.append("📊 MACD Bullish crossover")
+                    
+                    # Check for divergence
+                    if latest['macd_diff'] > 0:
+                        bullish_score += 1
+                else:
+                    bearish_score += 4
+                    reasons.append("📊 MACD Bearish crossover")
+            
+            # 4. Bollinger Bands (Weight: 3)
+            if not pd.isna(latest.get('bb_lower')):
+                bb_position = (latest['close'] - latest['bb_lower']) / (latest['bb_upper'] - latest['bb_lower'])
+                
+                if bb_position < 0.2:  # Near lower band
+                    bullish_score += 3
+                    reasons.append("📈 Price near lower Bollinger Band")
+                elif bb_position > 0.8:  # Near upper band
+                    bearish_score += 3
+                    reasons.append("📉 Price near upper Bollinger Band")
+            
+            # 5. Volume Analysis (Weight: 3)
+            volume_ratio = latest.get('volume_ratio', 1)
+            if volume_ratio > 1.5:  # High volume
+                if bullish_score > bearish_score:
+                    bullish_score += 3
+                    reasons.append(f"📊 High volume confirms bullish move ({volume_ratio:.1f}x)")
+                elif bearish_score > bullish_score:
+                    bearish_score += 3
+                    reasons.append(f"📊 High volume confirms bearish move ({volume_ratio:.1f}x)")
+            
+            # 6. Momentum Analysis (Weight: 3)
+            momentum_10 = (latest['close'] - df['close'].iloc[-10]) / df['close'].iloc[-10] * 100
+            if abs(momentum_10) > 3:
+                if momentum_10 > 0:
+                    bullish_score += 3
+                    reasons.append(f"⚡ Strong positive momentum: +{momentum_10:.2f}%")
+                else:
+                    bearish_score += 3
+                    reasons.append(f"⚡ Strong negative momentum: {momentum_10:.2f}%")
+            
+            # Calculate final signal
+            total_score = bullish_score - bearish_score
+            max_score = 22  # Maximum possible score
+            
+            # Determine signal and confidence
+            if total_score >= 8:
+                signal = "LONG"
+                confidence = min(70 + (total_score * 2), 98)
+                strength = "STRONG"
+            elif total_score <= -8:
+                signal = "SHORT"
+                confidence = min(70 + (abs(total_score) * 2), 98)
+                strength = "STRONG"
+            elif total_score >= 4:
+                signal = "LONG"
+                confidence = min(55 + (total_score * 3), 80)
+                strength = "MODERATE"
+            elif total_score <= -4:
+                signal = "SHORT"
+                confidence = min(55 + (abs(total_score) * 3), 80)
+                strength = "MODERATE"
+            else:
+                signal = "NEUTRAL"
+                confidence = 40 + abs(total_score) * 2
+                strength = "WEAK"
+            
+            # Calculate TP/SL
+            current_price = latest['close']
+            atr = latest.get('atr', current_price * 0.02)
+            
+            if signal == "LONG":
+                stop_loss = current_price - (atr * 1.5)
+                take_profit_1 = current_price + (atr * 2)
+                take_profit_2 = current_price + (atr * 3.5)
+            elif signal == "SHORT":
+                stop_loss = current_price + (atr * 1.5)
+                take_profit_1 = current_price - (atr * 2)
+                take_profit_2 = current_price - (atr * 3.5)
+            else:
+                stop_loss = None
+                take_profit_1 = None
+                take_profit_2 = None
+            
+            risk = abs(current_price - stop_loss) if stop_loss else 0
+            reward = abs(take_profit_1 - current_price) if take_profit_1 else 0
+            rr_ratio = reward / risk if risk > 0 else 2.0
+            
+            return {
+                'symbol': symbol,
+                'signal': signal,
+                'strength': strength,
+                'confidence': int(confidence),
+                'current_price': current_price,
+                'stop_loss': stop_loss,
+                'take_profit_1': take_profit_1,
+                'take_profit_2': take_profit_2,
+                'risk_reward_ratio': rr_ratio,
+                'reasons': reasons,
+                'confirmations': confirmations,
+                'rsi': latest.get('rsi', 50),
+                'volume_ratio': volume_ratio,
+                'volatility': latest.get('volatility', 0),
+                'momentum_10': momentum_10,
+                'bullish_score': bullish_score,
+                'bearish_score': bearish_score,
+                'total_score': total_score,
+                'max_score': max_score,
+                'timestamp': datetime.now()
+            }
+            
+        except Exception as e:
+            return None
+    
+    def scan_pair(self, symbol, timeframe='1h'):
+        """Scan a single pair and return signal"""
+        try:
+            df = self.fetch_ohlcv_data(symbol, timeframe, limit=100)
+            if df is not None and len(df) >= 50:
+                df = self.calculate_indicators(df)
+                signal = self.generate_advanced_signal(df, symbol)
+                return signal
+        except:
+            pass
+        return None
+    
+    def scan_market_wide(self, scan_mode='top_volume', max_pairs=50, timeframe='1h', min_confidence=65):
+        """Scan market-wide using different strategies"""
+        
+        # Get pairs based on scan mode
+        if scan_mode == 'top_volume':
+            pairs = self.get_top_volume_pairs(limit=max_pairs)
+            scan_desc = f"Top {max_pairs} by volume"
+        elif scan_mode == 'high_volatility':
+            pairs = self.get_high_volatility_pairs(limit=max_pairs)
+            scan_desc = f"Top {max_pairs} by volatility"
+        elif scan_mode == 'trending':
+            pairs = self.get_trending_pairs(limit=max_pairs)
+            scan_desc = f"Top {max_pairs} trending pairs"
+        else:  # 'all_market'
+            pairs = self.get_top_volume_pairs(limit=max_pairs * 2)
+            scan_desc = f"Market-wide ({len(pairs)} pairs)"
+        
+        if not pairs:
+            return [], scan_desc
+        
+        # Store market stats
+        st.session_state.market_stats = {
+            'total_pairs_scanned': len(pairs),
+            'avg_volume': sum(p['volume'] for p in pairs) / len(pairs) if pairs else 0,
+            'top_gainer': max(pairs, key=lambda x: x['change_24h']) if pairs else None,
+            'top_loser': min(pairs, key=lambda x: x['change_24h']) if pairs else None,
+        }
+        
+        signals = []
+        
+        # Parallel scanning with progress tracking
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            future_to_symbol = {}
+            
+            for pair_info in pairs:
+                future = executor.submit(self.scan_pair, pair_info['symbol'], timeframe)
+                future_to_symbol[future] = pair_info
+            
+            for future in as_completed(future_to_symbol):
+                pair_info = future_to_symbol[future]
+                try:
+                    signal = future.result()
+                    if signal and signal['confidence'] >= min_confidence and signal['signal'] != "NEUTRAL":
+                        # Add market data to signal
+                        signal['volume_24h'] = pair_info['volume']
+                        signal['change_24h'] = pair_info['change_24h']
+                        signals.append(signal)
+                except:
+                    pass
+        
+        # Sort by confidence and score
+        signals.sort(key=lambda x: (x['strength'] == 'STRONG', abs(x['total_score']), x['confidence']), reverse=True)
+        
+        return signals, scan_desc
+
 # Page configuration
 st.set_page_config(
     page_title="Forex Big Bot Signals",
