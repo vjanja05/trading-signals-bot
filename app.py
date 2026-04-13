@@ -19,19 +19,6 @@ import requests
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-# Load environment variables
-load_dotenv()
-
-# Initialize scanner based on environment
-if IS_CLOUD:
-    st.info("🌐 Cloud Mode - Using optimized scanner")
-    
-@st.cache_resource
-def get_scanner():
-    return AdvancedMarketScanner()
-
-scanner = get_scanner()
-
 # ===== PAYMENT CONFIGURATION =====
 YOUR_WALLET = os.getenv("YOUR_WALLET", "0x87ea9fc331bbe75fdae07f291046920b878e1367")
 ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 2592000))
@@ -365,6 +352,20 @@ st.set_page_config(
     page_icon="favicon.png",
     layout="wide"
 )
+
+# Load environment variables
+load_dotenv()
+
+# Initialize scanner based on environment
+if IS_CLOUD:
+    st.info("🌐 Cloud Mode - Using optimized scanner")
+    
+@st.cache_resource
+def get_scanner():
+    return AdvancedMarketScanner()
+
+scanner = get_scanner()
+
 
 # ===== PROFESSIONAL LANDING PAGE CSS =====
 st.markdown("""
