@@ -64,26 +64,48 @@ class AdvancedMarketScanner:
         self.blacklisted_terms = ['DOWN', 'UP', 'BULL', 'BEAR', '3L', '3S', '5L', '5S', 'LEVERAGE']
         self._init_exchange()
         
-    def _init_exchange(self):
-        """Initialize the best available exchange"""
-        exchanges = [
-            ('binance', lambda: ccxt.binance({'enableRateLimit': True, 'options': {'defaultType': 'spot'}})),
-            ('bybit', lambda: ccxt.bybit({'enableRateLimit': True})),
-            ('kucoin', lambda: ccxt.kucoin({'enableRateLimit': True})),
-            ('okx', lambda: ccxt.okx({'enableRateLimit': True})),
-            ('gate', lambda: ccxt.gate({'enableRateLimit': True})),
-        ]
-        
-        for name, init_func in exchanges:
-            try:
-                self.exchange = init_func()
-                self.exchange.load_markets()
-                st.session_state['active_exchange'] = name
-                return
-            except:
-                continue
-                
-        st.error("No exchange connections available")
+def _init_exchange(self):
+    """Initialize exchange with cloud-friendly settings"""
+    exchanges = [
+        # Try exchanges that work better on cloud
+        ('bybit', lambda: ccxt.bybit({
+            'enableRateLimit': True,
+            'timeout': 60000,  # 60 second timeout for cloud
+            'rateLimit': 2000,  # Slow down requests
+        })),
+        ('kucoin', lambda: ccxt.kucoin({
+            'enableRateLimit': True,
+            'timeout': 60000,
+        })),
+        ('okx', lambda: ccxt.okx({
+            'enableRateLimit': True,
+            'timeout': 60000,
+        })),
+        ('gate', lambda: ccxt.gate({
+            'enableRateLimit': True,
+            'timeout': 60000,
+        })),
+        # Binance last - often blocked on cloud
+        ('binance', lambda: ccxt.binance({
+            'enableRateLimit': True,
+            'timeout': 60000,
+            'options': {'defaultType': 'spot'}
+        })),
+    ]
+    
+    for name, init_func in exchanges:
+        try:
+            self.exchange = init_func()
+            # Don't load all markets - too slow on cloud
+            # self.exchange.load_markets()
+            st.session_state['active_exchange'] = name
+            return
+        except Exception as e:
+            continue
+            
+    # If all fail, use a fallback
+    self.exchange = None
+    st.session_state['active_exchange'] = None
     
     def get_all_usdt_pairs(self, min_volume_usdt=1000000):
         """Get all USDT trading pairs with volume filter"""
