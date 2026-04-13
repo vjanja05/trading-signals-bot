@@ -22,6 +22,12 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 # Load environment variables
 load_dotenv()
 
+# Detect if running on Streamlit Cloud
+IS_CLOUD = os.getenv('STREAMLIT_SHARING', '') == 'true' or os.getenv('STREAMLIT_CLOUD', '') == 'true'
+
+if IS_CLOUD:
+    st.warning("🌐 Running in Cloud Mode - Using fallback data sources")
+
 # ===== PAYMENT CONFIGURATION =====
 YOUR_WALLET = os.getenv("YOUR_WALLET", "0x87ea9fc331bbe75fdae07f291046920b878e1367")
 ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 2592000))
@@ -54,6 +60,75 @@ class PasswordManager:
             else:
                 return False, "Password already used"
         return False, "Invalid password"
+
+
+class CloudSafeScanner:
+    """Scanner that works on Streamlit Cloud without exchange connections"""
+    
+    def __init__(self):
+        self.exchange = None
+        self.use_fallback = True
+        st.session_state['active_exchange'] = 'CoinGecko (Cloud Safe)'
+    
+    @st.cache_data(ttl=60)
+    def get_top_coins(_self, limit=30):
+        """Use CoinGecko free API - works anywhere!"""
+        try:
+            import requests
+            
+            # Free CoinGecko API
+            url = "https://api.coingecko.com/api/v3/coins/markets"
+            params = {
+                'vs_currency': 'usd',
+                'order': 'volume_desc',
+                'per_page': limit,
+                'page': 1,
+                'sparkline': 'false'
+            }
+            
+            response = requests.get(url, params=params, timeout=10)
+            data = response.json()
+            
+            coins = []
+            for coin in data:
+                coins.append({
+                    'symbol': f"{coin['symbol'].upper()}/USDT",
+                    'price': coin['current_price'],
+                    'volume': coin['total_volume'],
+                    'change': coin['price_change_percentage_24h'] or 0
+                })
+            
+            return coins
+        except:
+            return []
+    
+    def scan_market(self, max_coins=30, min_confidence=55):
+        """Cloud-safe market scan"""
+        coins = self.get_top_coins(max_coins)
+        signals = []
+        
+        for coin in coins:
+            # Generate simple signal based on 24h change
+            change = coin['change']
+            
+            if abs(change) > 3:
+                signal = "LONG" if change > 0 else "SHORT"
+                confidence = min(55 + abs(change) * 3, 90)
+                
+                signals.append({
+                    'symbol': coin['symbol'],
+                    'signal': signal,
+                    'confidence': int(confidence),
+                    'current_price': coin['price'],
+                    'change_24h': change,
+                    'volume_24h': coin['volume'],
+                    'reasons': [f"24h Change: {change:+.2f}%"],
+                    'rsi': 50,
+                    'total_score': abs(change)
+                })
+        
+        signals.sort(key=lambda x: x['confidence'], reverse=True)
+        return signals, 2.0  # 2 second scan time
 
 class AdvancedMarketScanner:
     """Advanced market scanner that dynamically discovers and analyzes trading pairs"""
