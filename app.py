@@ -19,6 +19,9 @@ import requests
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+# Load environment variables
+load_dotenv()
+
 # ===== PAYMENT CONFIGURATION =====
 YOUR_WALLET = os.getenv("YOUR_WALLET", "0x87ea9fc331bbe75fdae07f291046920b878e1367")
 ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 2592000))
@@ -52,75 +55,7 @@ class PasswordManager:
                 return False, "Password already used"
         return False, "Invalid password"
 
-
-class CloudSafeScanner:
-    """Scanner that works on Streamlit Cloud without exchange connections"""
-    
-    def __init__(self):
-        self.exchange = None
-        self.use_fallback = True
-        st.session_state['active_exchange'] = 'CoinGecko (Cloud Safe)'
-    
-    @st.cache_data(ttl=60)
-    def get_top_coins(_self, limit=30):
-        """Use CoinGecko free API - works anywhere!"""
-        try:
-            import requests
-            
-            # Free CoinGecko API
-            url = "https://api.coingecko.com/api/v3/coins/markets"
-            params = {
-                'vs_currency': 'usd',
-                'order': 'volume_desc',
-                'per_page': limit,
-                'page': 1,
-                'sparkline': 'false'
-            }
-            
-            response = requests.get(url, params=params, timeout=10)
-            data = response.json()
-            
-            coins = []
-            for coin in data:
-                coins.append({
-                    'symbol': f"{coin['symbol'].upper()}/USDT",
-                    'price': coin['current_price'],
-                    'volume': coin['total_volume'],
-                    'change': coin['price_change_percentage_24h'] or 0
-                })
-            
-            return coins
-        except:
-            return []
-    
-    def scan_market(self, max_coins=30, min_confidence=55):
-        """Cloud-safe market scan"""
-        coins = self.get_top_coins(max_coins)
-        signals = []
-        
-        for coin in coins:
-            # Generate simple signal based on 24h change
-            change = coin['change']
-            
-            if abs(change) > 3:
-                signal = "LONG" if change > 0 else "SHORT"
-                confidence = min(55 + abs(change) * 3, 90)
-                
-                signals.append({
-                    'symbol': coin['symbol'],
-                    'signal': signal,
-                    'confidence': int(confidence),
-                    'current_price': coin['price'],
-                    'change_24h': change,
-                    'volume_24h': coin['volume'],
-                    'reasons': [f"24h Change: {change:+.2f}%"],
-                    'rsi': 50,
-                    'total_score': abs(change)
-                })
-        
-        signals.sort(key=lambda x: x['confidence'], reverse=True)
-        return signals, 2.0  # 2 second scan time
-
+# ===== SCANNER CLASS =====
 class AdvancedMarketScanner:
     """Simple, robust scanner that works on Streamlit Cloud"""
     
@@ -131,22 +66,25 @@ class AdvancedMarketScanner:
     def _init_exchange(self):
         """Initialize exchange - cloud safe"""
         try:
-            # Try Bybit first - most cloud friendly
             self.exchange = ccxt.bybit({
                 'enableRateLimit': True,
                 'timeout': 20000
             })
-            st.session_state['active_exchange'] = 'bybit'
         except:
             try:
                 self.exchange = ccxt.kucoin({
                     'enableRateLimit': True,
                     'timeout': 20000
                 })
-                st.session_state['active_exchange'] = 'kucoin'
             except:
-                self.exchange = None
-                st.session_state['active_exchange'] = 'none'
+                try:
+                    self.exchange = ccxt.binance({
+                        'enableRateLimit': True,
+                        'options': {'defaultType': 'spot'},
+                        'timeout': 20000
+                    })
+                except:
+                    self.exchange = None
     
     def fetch_top_symbols(self, limit=30):
         """Get top symbols - single API call"""
@@ -159,13 +97,12 @@ class AdvancedMarketScanner:
             
             for symbol, ticker in tickers.items():
                 if '/USDT' in symbol:
-                    # Skip weird pairs
                     if any(x in symbol for x in ['UP', 'DOWN', 'BULL', 'BEAR', '3L', '3S']):
                         continue
                     
                     volume = ticker.get('quoteVolume', 0) or ticker.get('volume', 0) * ticker.get('last', 0)
                     
-                    if volume > 2000000:  # $2M volume
+                    if volume > 2000000:
                         symbols.append({
                             'symbol': symbol,
                             'price': ticker.get('last', 0) or 0,
@@ -173,11 +110,10 @@ class AdvancedMarketScanner:
                             'change': ticker.get('percentage', 0) or ticker.get('change', 0) or 0
                         })
             
-            # Sort by volume
             symbols.sort(key=lambda x: x['volume'], reverse=True)
             return symbols[:limit]
             
-        except Exception as e:
+        except:
             return []
     
     def get_ohlcv(self, symbol, limit=50):
@@ -205,30 +141,24 @@ class AdvancedMarketScanner:
             current = close[-1]
             
             # Simple indicators
-            # RSI
             delta = pd.Series(close).diff()
             gain = delta.where(delta > 0, 0).rolling(14).mean().values[-1]
             loss = (-delta.where(delta < 0, 0)).rolling(14).mean().values[-1]
             rs = gain / loss if loss != 0 else 1
             rsi = 100 - (100 / (1 + rs))
             
-            # EMAs
             ema9 = pd.Series(close).ewm(span=9).mean().values[-1]
             ema21 = pd.Series(close).ewm(span=21).mean().values[-1]
             
-            # Momentum
             momentum = (current - close[-10]) / close[-10] * 100
             
-            # Volume ratio
             volume = df['volume'].values
             avg_volume = volume[-20:].mean()
             vol_ratio = volume[-1] / avg_volume if avg_volume > 0 else 1
             
-            # Scoring
             score = 0
             reasons = []
             
-            # EMA
             if ema9 > ema21:
                 score += 3
                 reasons.append("EMA Bullish")
@@ -236,7 +166,6 @@ class AdvancedMarketScanner:
                 score -= 3
                 reasons.append("EMA Bearish")
             
-            # RSI
             if rsi < 35:
                 score += 4
                 reasons.append(f"RSI Oversold ({rsi:.0f})")
@@ -244,7 +173,6 @@ class AdvancedMarketScanner:
                 score -= 4
                 reasons.append(f"RSI Overbought ({rsi:.0f})")
             
-            # Volume
             if vol_ratio > 1.3:
                 if score > 0:
                     score += 2
@@ -253,7 +181,6 @@ class AdvancedMarketScanner:
                     score -= 2
                     reasons.append(f"High Volume ({vol_ratio:.1f}x)")
             
-            # Momentum
             if abs(momentum) > 2:
                 if momentum > 0:
                     score += 2
@@ -261,14 +188,12 @@ class AdvancedMarketScanner:
                     score -= 2
                 reasons.append(f"Momentum: {momentum:+.1f}%")
             
-            # Determine signal
             if abs(score) < 4:
                 return None
             
             signal_type = "LONG" if score > 0 else "SHORT"
             confidence = min(50 + abs(score) * 6, 95)
             
-            # TP/SL
             if signal_type == "LONG":
                 sl_price = current * 0.97
                 tp_price = current * 1.05
@@ -300,20 +225,17 @@ class AdvancedMarketScanner:
                 'volume_24h': symbol_data.get('volume', 0)
             }
             
-        except Exception as e:
+        except:
             return None
     
     def scan_market_wide(self, scan_mode='top_volume', max_pairs=30, timeframe='1h', min_confidence=55):
         """Main scan method"""
         
-        # Get symbols
         symbols = self.fetch_top_symbols(max_pairs)
         
         if not symbols:
-            st.warning("No symbols found. Exchange may be unavailable.")
             return [], "No data"
         
-        # Store stats
         try:
             st.session_state.market_stats = {
                 'total_pairs_scanned': len(symbols),
@@ -326,7 +248,6 @@ class AdvancedMarketScanner:
         
         signals = []
         
-        # Progress bar
         progress = st.progress(0)
         status = st.empty()
         
@@ -341,32 +262,19 @@ class AdvancedMarketScanner:
         progress.empty()
         status.empty()
         
-        # Sort by confidence
         signals.sort(key=lambda x: x['confidence'], reverse=True)
         
         return signals, f"Scanned {len(symbols)} pairs"
 
-# Page configuration
+# ===== PAGE CONFIGURATION - MUST BE FIRST ST COMMAND =====
 st.set_page_config(
     page_title="Forex Big Bot Signals",
     page_icon="favicon.png",
     layout="wide"
 )
 
-# Load environment variables
-load_dotenv()
-
-# Initialize scanner based on environment
-if IS_CLOUD:
-    st.info("🌐 Cloud Mode - Using optimized scanner")
-    
-@st.cache_resource
-def get_scanner():
-    return AdvancedMarketScanner()
-
-scanner = get_scanner()
-
-
+# ===== NOW YOU CAN USE st FREELY =====
+# (Keep all your CSS and the rest of your app below)
 # ===== PROFESSIONAL LANDING PAGE CSS =====
 st.markdown("""
     <style>
