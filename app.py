@@ -55,7 +55,6 @@ class PasswordManager:
                 return False, "Password already used"
         return False, "Invalid password"
 
-# ===== SCANNER CLASS =====
 class AdvancedMarketScanner:
     """Simple, robust scanner that works on Streamlit Cloud"""
     
@@ -68,20 +67,20 @@ class AdvancedMarketScanner:
         try:
             self.exchange = ccxt.bybit({
                 'enableRateLimit': True,
-                'timeout': 20000
+                'timeout': 30000
             })
         except:
             try:
                 self.exchange = ccxt.kucoin({
                     'enableRateLimit': True,
-                    'timeout': 20000
+                    'timeout': 30000
                 })
             except:
                 try:
                     self.exchange = ccxt.binance({
                         'enableRateLimit': True,
                         'options': {'defaultType': 'spot'},
-                        'timeout': 20000
+                        'timeout': 30000
                     })
                 except:
                     self.exchange = None
@@ -97,12 +96,16 @@ class AdvancedMarketScanner:
             
             for symbol, ticker in tickers.items():
                 if '/USDT' in symbol:
-                    if any(x in symbol for x in ['UP', 'DOWN', 'BULL', 'BEAR', '3L', '3S']):
+                    # Skip weird pairs
+                    skip_terms = ['UP', 'DOWN', 'BULL', 'BEAR', '3L', '3S', '5L', '5S']
+                    if any(x in symbol for x in skip_terms):
                         continue
                     
-                    volume = ticker.get('quoteVolume', 0) or ticker.get('volume', 0) * ticker.get('last', 0)
+                    volume = ticker.get('quoteVolume', 0)
+                    if volume == 0:
+                        volume = ticker.get('volume', 0) * ticker.get('last', 0)
                     
-                    if volume > 2000000:
+                    if volume > 1000000:  # $1M minimum
                         symbols.append({
                             'symbol': symbol,
                             'price': ticker.get('last', 0) or 0,
@@ -113,104 +116,161 @@ class AdvancedMarketScanner:
             symbols.sort(key=lambda x: x['volume'], reverse=True)
             return symbols[:limit]
             
-        except:
+        except Exception as e:
             return []
     
-    def get_ohlcv(self, symbol, limit=50):
+    def get_ohlcv(self, symbol, limit=100):
         """Get OHLCV data"""
         if not self.exchange:
             return None
         
         try:
             ohlcv = self.exchange.fetch_ohlcv(symbol, '1h', limit=limit)
+            if not ohlcv or len(ohlcv) < 30:
+                return None
             df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
             return df
         except:
             return None
     
+    def calculate_rsi(self, prices, period=14):
+        """Safe RSI calculation"""
+        try:
+            if len(prices) < period + 1:
+                return 50
+            delta = np.diff(prices)
+            gain = np.where(delta > 0, delta, 0)
+            loss = np.where(delta < 0, -delta, 0)
+            avg_gain = np.mean(gain[-period:]) if len(gain) >= period else np.mean(gain)
+            avg_loss = np.mean(loss[-period:]) if len(loss) >= period else np.mean(loss)
+            if avg_loss == 0:
+                return 100
+            rs = avg_gain / avg_loss
+            return 100 - (100 / (1 + rs))
+        except:
+            return 50
+    
+    def calculate_ema(self, prices, period):
+        """Safe EMA calculation"""
+        try:
+            if len(prices) < period:
+                return prices[-1] if len(prices) > 0 else 0
+            weights = np.exp(np.linspace(-1., 0., period))
+            weights /= weights.sum()
+            return np.convolve(prices[-period:], weights, mode='valid')[-1]
+        except:
+            return prices[-1] if len(prices) > 0 else 0
+    
     def analyze_symbol(self, symbol_data):
-        """Analyze a single symbol"""
+        """Analyze a single symbol - with full error handling"""
         symbol = symbol_data['symbol']
         
         try:
-            df = self.get_ohlcv(symbol, 50)
+            df = self.get_ohlcv(symbol, 100)
             if df is None or len(df) < 30:
                 return None
             
-            close = df['close'].values
-            current = close[-1]
+            close_prices = df['close'].values
+            current_price = float(close_prices[-1])
             
-            # Simple indicators
-            delta = pd.Series(close).diff()
-            gain = delta.where(delta > 0, 0).rolling(14).mean().values[-1]
-            loss = (-delta.where(delta < 0, 0)).rolling(14).mean().values[-1]
-            rs = gain / loss if loss != 0 else 1
-            rsi = 100 - (100 / (1 + rs))
+            if current_price <= 0:
+                return None
             
-            ema9 = pd.Series(close).ewm(span=9).mean().values[-1]
-            ema21 = pd.Series(close).ewm(span=21).mean().values[-1]
+            # RSI
+            rsi = self.calculate_rsi(close_prices)
             
-            momentum = (current - close[-10]) / close[-10] * 100
+            # EMAs
+            ema9 = self.calculate_ema(close_prices, 9)
+            ema21 = self.calculate_ema(close_prices, 21)
             
-            volume = df['volume'].values
-            avg_volume = volume[-20:].mean()
-            vol_ratio = volume[-1] / avg_volume if avg_volume > 0 else 1
+            # Momentum
+            if len(close_prices) >= 10:
+                momentum = (current_price - close_prices[-10]) / close_prices[-10] * 100
+            else:
+                momentum = 0
             
+            # Volume ratio
+            volumes = df['volume'].values
+            if len(volumes) >= 20:
+                avg_volume = np.mean(volumes[-20:])
+                vol_ratio = volumes[-1] / avg_volume if avg_volume > 0 else 1
+            else:
+                vol_ratio = 1
+            
+            # Scoring
             score = 0
             reasons = []
             
-            if ema9 > ema21:
-                score += 3
-                reasons.append("EMA Bullish")
-            else:
-                score -= 3
-                reasons.append("EMA Bearish")
+            # EMA Signal
+            if ema9 > 0 and ema21 > 0:
+                if ema9 > ema21:
+                    score += 3
+                    reasons.append("📈 EMA Bullish")
+                else:
+                    score -= 3
+                    reasons.append("📉 EMA Bearish")
             
+            # RSI Signal
             if rsi < 35:
                 score += 4
-                reasons.append(f"RSI Oversold ({rsi:.0f})")
+                reasons.append(f"💪 RSI Oversold ({rsi:.0f})")
             elif rsi > 65:
                 score -= 4
-                reasons.append(f"RSI Overbought ({rsi:.0f})")
+                reasons.append(f"⚠️ RSI Overbought ({rsi:.0f})")
+            elif rsi > 50:
+                score += 1
+            else:
+                score -= 1
             
+            # Volume Signal
             if vol_ratio > 1.3:
                 if score > 0:
                     score += 2
-                    reasons.append(f"High Volume ({vol_ratio:.1f}x)")
+                    reasons.append(f"📊 High Volume ({vol_ratio:.1f}x)")
                 elif score < 0:
                     score -= 2
-                    reasons.append(f"High Volume ({vol_ratio:.1f}x)")
+                    reasons.append(f"📊 High Volume ({vol_ratio:.1f}x)")
             
+            # Momentum Signal
             if abs(momentum) > 2:
                 if momentum > 0:
                     score += 2
+                    reasons.append(f"⚡ Positive Momentum: +{momentum:.1f}%")
                 else:
                     score -= 2
-                reasons.append(f"Momentum: {momentum:+.1f}%")
+                    reasons.append(f"⚡ Negative Momentum: {momentum:.1f}%")
             
+            # Need minimum score
             if abs(score) < 4:
                 return None
             
+            # Determine signal
             signal_type = "LONG" if score > 0 else "SHORT"
-            confidence = min(50 + abs(score) * 6, 95)
+            confidence = min(50 + abs(score) * 5, 95)
+            strength = "STRONG" if abs(score) >= 8 else "MODERATE" if abs(score) >= 5 else "WEAK"
             
+            # TP/SL
             if signal_type == "LONG":
-                sl_price = current * 0.97
-                tp_price = current * 1.05
+                sl_price = current_price * 0.97
+                tp_price = current_price * 1.05
             else:
-                sl_price = current * 1.03
-                tp_price = current * 0.95
+                sl_price = current_price * 1.03
+                tp_price = current_price * 0.95
+            
+            risk = abs(current_price - sl_price)
+            reward = abs(tp_price - current_price)
+            rr_ratio = reward / risk if risk > 0 else 2.0
             
             return {
                 'symbol': symbol,
                 'signal': signal_type,
-                'strength': 'STRONG' if abs(score) >= 8 else 'MODERATE',
+                'strength': strength,
                 'confidence': int(confidence),
-                'current_price': current,
+                'current_price': current_price,
                 'stop_loss': sl_price,
                 'take_profit_1': tp_price,
                 'take_profit_2': None,
-                'risk_reward_ratio': abs(tp_price - current) / abs(current - sl_price),
+                'risk_reward_ratio': rr_ratio,
                 'reasons': reasons,
                 'confirmations': reasons[:3],
                 'rsi': rsi,
@@ -222,50 +282,79 @@ class AdvancedMarketScanner:
                 'total_score': score,
                 'max_score': 15,
                 'change_24h': symbol_data.get('change', 0),
-                'volume_24h': symbol_data.get('volume', 0)
+                'volume_24h': symbol_data.get('volume', 0),
+                'timestamp': datetime.now()
             }
             
-        except:
+        except Exception as e:
             return None
     
     def scan_market_wide(self, scan_mode='top_volume', max_pairs=30, timeframe='1h', min_confidence=55):
-        """Main scan method"""
-        
-        symbols = self.fetch_top_symbols(max_pairs)
-        
-        if not symbols:
-            return [], "No data"
+        """Main scan method - completely safe"""
         
         try:
+            symbols = self.fetch_top_symbols(max_pairs)
+        except Exception as e:
+            return [], "Error fetching symbols"
+        
+        if not symbols:
+            return [], "No symbols found"
+        
+        # Store stats safely
+        try:
+            total_pairs = len(symbols)
+            avg_vol = sum(s.get('volume', 0) for s in symbols) / total_pairs if total_pairs > 0 else 0
+            
+            # Safe max/min
+            top_gainer = None
+            top_loser = None
+            if symbols:
+                valid_changes = [s for s in symbols if s.get('change') is not None]
+                if valid_changes:
+                    top_gainer = max(valid_changes, key=lambda x: x.get('change', 0))
+                    top_loser = min(valid_changes, key=lambda x: x.get('change', 0))
+            
             st.session_state.market_stats = {
-                'total_pairs_scanned': len(symbols),
-                'avg_volume': sum(s.get('volume', 0) for s in symbols) / len(symbols),
-                'top_gainer': max(symbols, key=lambda x: x.get('change', 0)),
-                'top_loser': min(symbols, key=lambda x: x.get('change', 0))
+                'total_pairs_scanned': total_pairs,
+                'avg_volume': avg_vol,
+                'top_gainer': top_gainer,
+                'top_loser': top_loser
             }
-        except:
+        except Exception as e:
             st.session_state.market_stats = {'total_pairs_scanned': len(symbols)}
         
         signals = []
         
-        progress = st.progress(0)
-        status = st.empty()
-        
-        for i, sym in enumerate(symbols):
-            progress.progress((i + 1) / len(symbols))
-            status.text(f"Scanning {sym['symbol']} ({i+1}/{len(symbols)})")
+        # Progress tracking
+        try:
+            progress = st.progress(0)
+            status = st.empty()
             
-            signal = self.analyze_symbol(sym)
-            if signal and signal['confidence'] >= min_confidence:
-                signals.append(signal)
+            total = len(symbols)
+            for i, sym in enumerate(symbols):
+                try:
+                    progress.progress((i + 1) / total)
+                    status.text(f"🔍 Scanning {sym['symbol']} ({i+1}/{total})")
+                    
+                    signal = self.analyze_symbol(sym)
+                    if signal and signal.get('confidence', 0) >= min_confidence:
+                        signals.append(signal)
+                except Exception as e:
+                    continue
+            
+            progress.empty()
+            status.empty()
+            
+        except Exception as e:
+            pass
         
-        progress.empty()
-        status.empty()
-        
-        signals.sort(key=lambda x: x['confidence'], reverse=True)
+        # Sort signals safely
+        try:
+            signals.sort(key=lambda x: x.get('confidence', 0), reverse=True)
+        except:
+            pass
         
         return signals, f"Scanned {len(symbols)} pairs"
-
 # ===== PAGE CONFIGURATION - MUST BE FIRST ST COMMAND =====
 st.set_page_config(
     page_title="Forex Big Bot Signals",
