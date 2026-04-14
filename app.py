@@ -1509,7 +1509,6 @@ if df is not None:
     )
     
     st.plotly_chart(fig, use_container_width=True)
-                    
     st.markdown("---")
             
             # ===== ALL SIGNALS SUMMARY TABLE =====
