@@ -65,7 +65,7 @@ class AdvancedMarketScanner:
     def _init_exchange(self):
         """Initialize exchange"""
         try:
-            self.exchange = ccxt.bybit({'enableRateLimit': True, 'timeout': 30000})
+            self.exchange = ccxt.bybit({'enableRateLimit': True, 'timeout': 30000, 'rateLimit': 500})
         except:
             try:
                 self.exchange = ccxt.kucoin({'enableRateLimit': True, 'timeout': 30000})
