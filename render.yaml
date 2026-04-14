@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: trading-signals-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.enableCORS false --server.enableXsrfProtection false
+    envVars:
+      - key: YOUR_WALLET
+        value: 0x87ea9fc331bbe75fdae07f291046920b878e1367
+      - key: ACCESS_DURATION
+        value: "2592000"
