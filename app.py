@@ -1206,7 +1206,10 @@ else:
     
     # Auto-scan option
     auto_scan = st.checkbox("🔄 Auto-scan every 2 minutes", help="Continuously scan for new opportunities", key="auto_scan_main")
-    
+
+    # Initialize signals variable
+    signals = st.session_state.get('scanner_results', [])
+
     # Scanning logic - now both variables are defined
     if scan_button or auto_scan:
         with st.spinner(f"🔍 Scanning {max_pairs} pairs across the market..."):
