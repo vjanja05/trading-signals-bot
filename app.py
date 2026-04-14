@@ -1239,320 +1239,237 @@ else:
         progress_bar.empty()
         status_container.empty()
         
-        if signals:
-            st.session_state.scanner_results = signals
-            st.session_state.best_signal = signals[0]
-            st.session_state.last_update = datetime.now()
+if signals:
+    st.session_state.scanner_results = signals
+    st.session_state.best_signal = signals[0]
+    st.session_state.last_update = datetime.now()
+    
+    st.success(f"✅ Scan complete! Found {len(signals)} quality trading signals from {scan_desc}")
+    
+    st.markdown("### 🏆 TOP 5 SIGNALS FOUND")
+    
+    num_tabs = min(5, len(signals))
+    tab_labels = []
+    for i in range(num_tabs):
+        signal = signals[i]
+        emoji = "📈" if signal['signal'] == "LONG" else "📉"
+        tab_labels.append(f"{emoji} #{i+1}: {signal['symbol']}")
+    
+    tabs = st.tabs(tab_labels)
+    
+    for i in range(num_tabs):
+        with tabs[i]:
+            best = signals[i]
             
-            # Success message
-            st.success(f"✅ Scan complete! Found {len(signals)} quality trading signals from {scan_desc}")
+            # Signal header
+            signal_class = "signal-long" if best['signal'] == "LONG" else "signal-short"
+            st.markdown(f"""
+            <div class="{signal_class.split()[0]}" style="margin-bottom: 20px;">
+                <h2 style="margin:0;">{best['symbol']} - {best['signal']} ({best['strength']})</h2>
+                <h3 style="margin:10px 0;">Confidence: {best['confidence']}% | Score: {best['total_score']}/{best['max_score']}</h3>
+                <p style="margin:5px 0;">💰 Entry: ${best['current_price']:,.4f} | R:R 1:{best['risk_reward_ratio']:.2f}</p>
+                <p style="margin:5px 0;">📊 24h Change: {best.get('change_24h', 0):+.2f}% | Volume: ${best.get('volume_24h', 0):,.0f}</p>
+            </div>
+            """, unsafe_allow_html=True)
             
-            # ===== DISPLAY TOP 5 SIGNALS WITH DETAILED ANALYSIS =====
-            st.markdown("### 🏆 TOP 5 SIGNALS FOUND")
+            # Key metrics
+            st.markdown("#### 📊 Key Metrics")
+            col1, col2, col3, col4, col5, col6 = st.columns(6)
+            with col1:
+                st.metric("Price", f"${best['current_price']:,.4f}")
+            with col2:
+                st.metric("RSI", f"{best['rsi']:.1f}")
+            with col3:
+                st.metric("Confidence", f"{best['confidence']}%")
+            with col4:
+                st.metric("Volatility", f"{best['volatility']:.2f}%")
+            with col5:
+                st.metric("Volume Ratio", f"{best['volume_ratio']:.2f}x")
+            with col6:
+                st.metric("Momentum", f"{best['momentum_10']:+.2f}%")
             
-            # Determine how many tabs to create (up to 5)
-            num_tabs = min(5, len(signals))
+            # Trading levels
+            st.markdown("#### 🎯 Trading Levels")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.markdown("**📊 Entry**")
+                st.write(f"Price: ${best['current_price']:,.4f}")
+                st.write(f"Signal: {best['signal']} ({best['strength']})")
+                st.write(f"Score: {best['total_score']}/{best['max_score']}")
+            with col2:
+                st.markdown("**🛑 Stop Loss**")
+                if best.get('stop_loss'):
+                    st.write(f"Price: ${best['stop_loss']:,.4f}")
+                    if best['signal'] == "LONG":
+                        distance = ((best['current_price'] - best['stop_loss']) / best['current_price']) * 100
+                        st.write(f"Distance: -{distance:.2f}%")
+                    else:
+                        distance = ((best['stop_loss'] - best['current_price']) / best['current_price']) * 100
+                        st.write(f"Distance: +{distance:.2f}%")
+            with col3:
+                st.markdown("**🎯 Take Profit**")
+                if best.get('take_profit_1'):
+                    st.write(f"TP1: ${best['take_profit_1']:,.4f}")
+                    if best['signal'] == "LONG":
+                        distance = ((best['take_profit_1'] - best['current_price']) / best['current_price']) * 100
+                        st.write(f"Distance: +{distance:.2f}%")
+                    else:
+                        distance = ((best['current_price'] - best['take_profit_1']) / best['current_price']) * 100
+                        st.write(f"Distance: +{distance:.2f}%")
             
-            # Create tab labels
-            tab_labels = []
-            for i in range(num_tabs):
-                signal = signals[i]
-                emoji = "📈" if signal['signal'] == "LONG" else "📉"
-                tab_labels.append(f"{emoji} #{i+1}: {signal['symbol']}")
+            # Risk/Reward
+            st.markdown("#### 📈 Risk/Reward Analysis")
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                rr_ratio = best['risk_reward_ratio']
+                if rr_ratio >= 2.5:
+                    st.success(f"✅ Excellent R:R Ratio: 1:{rr_ratio:.2f}")
+                elif rr_ratio >= 1.8:
+                    st.success(f"✅ Good R:R Ratio: 1:{rr_ratio:.2f}")
+                elif rr_ratio >= 1.5:
+                    st.warning(f"⚠️ Acceptable R:R Ratio: 1:{rr_ratio:.2f}")
+                else:
+                    st.error(f"❌ Poor R:R Ratio: 1:{rr_ratio:.2f}")
+            with col2:
+                st.markdown("**📊 Signal Strength**")
+                st.write(f"Bullish: {best['bullish_score']}/{best['max_score']}")
+                st.write(f"Bearish: {best['bearish_score']}/{best['max_score']}")
+                total = best['bullish_score'] + best['bearish_score']
+                if total > 0:
+                    bullish_pct = (best['bullish_score'] / total) * 100
+                    st.progress(bullish_pct / 100, text=f"Bullish: {bullish_pct:.0f}%")
+            with col3:
+                st.markdown("**💡 Trade Quality**")
+                quality_score = 0
+                if best['strength'] == 'STRONG':
+                    quality_score += 3
+                elif best['strength'] == 'MODERATE':
+                    quality_score += 2
+                else:
+                    quality_score += 1
+                if best['risk_reward_ratio'] >= 2.5:
+                    quality_score += 3
+                elif best['risk_reward_ratio'] >= 1.8:
+                    quality_score += 2
+                elif best['risk_reward_ratio'] >= 1.5:
+                    quality_score += 1
+                if best['confidence'] >= 80:
+                    quality_score += 2
+                elif best['confidence'] >= 70:
+                    quality_score += 1
+                if quality_score >= 7:
+                    st.success(f"⭐⭐⭐⭐⭐ Excellent ({quality_score}/8)")
+                elif quality_score >= 5:
+                    st.success(f"⭐⭐⭐⭐ Good ({quality_score}/8)")
+                elif quality_score >= 3:
+                    st.warning(f"⭐⭐⭐ Fair ({quality_score}/8)")
+                else:
+                    st.error(f"⭐⭐ Poor ({quality_score}/8)")
             
-            # Create tabs
-            tabs = st.tabs(tab_labels)
+            # Signal Confirmations
+            st.markdown("#### ✅ Signal Confirmations")
+            col1, col2 = st.columns(2)
+            with col1:
+                st.markdown("**Technical Confirmations:**")
+                for conf in best.get('confirmations', [])[:5]:
+                    st.write(f"• {conf}")
+            with col2:
+                st.markdown("**Detailed Analysis:**")
+                for reason in best['reasons'][:5]:
+                    st.write(f"• {reason}")
             
-            # Populate each tab with detailed analysis
-            for i in range(num_tabs):
-                with tabs[i]:
-                    best = signals[i]
-                    
-                    # Signal header
-                    signal_class = "signal-long" if best['signal'] == "LONG" else "signal-short"
-                    st.markdown(f"""
-                    <div class="{signal_class.split()[0]}" style="margin-bottom: 20px;">
-                        <h2 style="margin:0;">{best['symbol']} - {best['signal']} ({best['strength']})</h2>
-                        <h3 style="margin:10px 0;">Confidence: {best['confidence']}% | Score: {best['total_score']}/{best['max_score']}</h3>
-                        <p style="margin:5px 0;">💰 Entry: ${best['current_price']:,.4f} | R:R 1:{best['risk_reward_ratio']:.2f}</p>
-                        <p style="margin:5px 0;">📊 24h Change: {best.get('change_24h', 0):+.2f}% | Volume: ${best.get('volume_24h', 0):,.0f}</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # Key metrics
-                    st.markdown("#### 📊 Key Metrics")
-                    col1, col2, col3, col4, col5, col6 = st.columns(6)
-                    with col1:
-                        st.metric("Price", f"${best['current_price']:,.4f}")
-                    with col2:
-                        st.metric("RSI", f"{best['rsi']:.1f}")
-                    with col3:
-                        st.metric("Confidence", f"{best['confidence']}%")
-                    with col4:
-                        st.metric("Volatility", f"{best['volatility']:.2f}%")
-                    with col5:
-                        st.metric("Volume Ratio", f"{best['volume_ratio']:.2f}x")
-                    with col6:
-                        st.metric("Momentum", f"{best['momentum_10']:+.2f}%")
-                    
-                    # Trading levels
-                    st.markdown("#### 🎯 Trading Levels")
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        st.markdown("**📊 Entry**")
-                        st.write(f"Price: ${best['current_price']:,.4f}")
-                        st.write(f"Signal: {best['signal']} ({best['strength']})")
-                        st.write(f"Score: {best['total_score']}/{best['max_score']}")
-                    
-                    with col2:
-                        st.markdown("**🛑 Stop Loss**")
-                        if best.get('stop_loss'):
-                            st.write(f"Price: ${best['stop_loss']:,.4f}")
-                            if best['signal'] == "LONG":
-                                distance = ((best['current_price'] - best['stop_loss']) / best['current_price']) * 100
-                                st.write(f"Distance: -{distance:.2f}%")
-                                risk_usd = best['current_price'] - best['stop_loss']
-                                st.write(f"Risk: ${risk_usd:.4f}")
-                            else:
-                                distance = ((best['stop_loss'] - best['current_price']) / best['current_price']) * 100
-                                st.write(f"Distance: +{distance:.2f}%")
-                                risk_usd = best['stop_loss'] - best['current_price']
-                                st.write(f"Risk: ${risk_usd:.4f}")
-                    
-                    with col3:
-                        st.markdown("**🎯 Take Profit**")
-                        if best.get('take_profit_1'):
-                            st.write(f"TP1: ${best['take_profit_1']:,.4f}")
-                            if best.get('take_profit_2'):
-                                st.write(f"TP2: ${best['take_profit_2']:,.4f}")
-                            if best['signal'] == "LONG":
-                                distance = ((best['take_profit_1'] - best['current_price']) / best['current_price']) * 100
-                                st.write(f"Distance: +{distance:.2f}%")
-                                reward_usd = best['take_profit_1'] - best['current_price']
-                                st.write(f"Reward: ${reward_usd:.4f}")
-                            else:
-                                distance = ((best['current_price'] - best['take_profit_1']) / best['current_price']) * 100
-                                st.write(f"Distance: +{distance:.2f}%")
-                                reward_usd = best['current_price'] - best['take_profit_1']
-                                st.write(f"Reward: ${reward_usd:.4f}")
-                    
-                    # Risk/Reward Analysis
-                    st.markdown("#### 📈 Risk/Reward Analysis")
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
-                        rr_ratio = best['risk_reward_ratio']
-                        if rr_ratio >= 2.5:
-                            st.success(f"✅ Excellent R:R Ratio: 1:{rr_ratio:.2f}")
-                        elif rr_ratio >= 1.8:
-                            st.success(f"✅ Good R:R Ratio: 1:{rr_ratio:.2f}")
-                        elif rr_ratio >= 1.5:
-                            st.warning(f"⚠️ Acceptable R:R Ratio: 1:{rr_ratio:.2f}")
-                        else:
-                            st.error(f"❌ Poor R:R Ratio: 1:{rr_ratio:.2f}")
-                    
-                    with col2:
-                        st.markdown("**📊 Signal Strength**")
-                        st.write(f"Bullish: {best['bullish_score']}/{best['max_score']}")
-                        st.write(f"Bearish: {best['bearish_score']}/{best['max_score']}")
-                        
-                        # Progress bar for bullish vs bearish
-                        total = best['bullish_score'] + best['bearish_score']
-                        if total > 0:
-                            bullish_pct = (best['bullish_score'] / total) * 100
-                            st.progress(bullish_pct / 100, text=f"Bullish: {bullish_pct:.0f}%")
-                    
-                    with col3:
-                        st.markdown("**💡 Trade Quality**")
-                        quality_score = 0
-                        if best['strength'] == 'STRONG':
-                            quality_score += 3
-                        elif best['strength'] == 'MODERATE':
-                            quality_score += 2
-                        else:
-                            quality_score += 1
-                        
-                        if best['risk_reward_ratio'] >= 2.5:
-                            quality_score += 3
-                        elif best['risk_reward_ratio'] >= 1.8:
-                            quality_score += 2
-                        elif best['risk_reward_ratio'] >= 1.5:
-                            quality_score += 1
-                        
-                        if best['confidence'] >= 80:
-                            quality_score += 2
-                        elif best['confidence'] >= 70:
-                            quality_score += 1
-                        
-                        if quality_score >= 7:
-                            st.success(f"⭐⭐⭐⭐⭐ Excellent ({quality_score}/8)")
-                        elif quality_score >= 5:
-                            st.success(f"⭐⭐⭐⭐ Good ({quality_score}/8)")
-                        elif quality_score >= 3:
-                            st.warning(f"⭐⭐⭐ Fair ({quality_score}/8)")
-                        else:
-                            st.error(f"⭐⭐ Poor ({quality_score}/8)")
-                    
-                    # Signal Confirmations and Reasons
-                    st.markdown("#### ✅ Signal Confirmations")
-                    col1, col2 = st.columns(2)
-                    
-                    with col1:
-                        st.markdown("**Technical Confirmations:**")
-                        for conf in best.get('confirmations', [])[:5]:
-                            st.write(f"• {conf}")
-                    
-                    with col2:
-                        st.markdown("**Detailed Analysis:**")
-                        for reason in best['reasons'][:5]:
-                            st.write(f"• {reason}")
-                    
-                    # Additional Analysis
-                    with st.expander("🔍 View Additional Analysis", expanded=False):
-                        st.markdown(f"""
-                        **Market Context:**
-                        - 24h Change: {best.get('change_24h', 0):+.2f}%
-                        - 24h Volume: ${best.get('volume_24h', 0):,.0f}
-                        - Volatility (20-period): {best['volatility']:.2f}%
-                        - Volume Ratio: {best['volume_ratio']:.2f}x average
-                        
-                        **Technical Indicators:**
-                        - RSI (14): {best['rsi']:.1f}
-                        - 10-period Momentum: {best['momentum_10']:+.2f}%
-                        
-                        **Risk Management:**
-                        - Position Size Recommendation: 1-2% of portfolio
-                        - Suggested Leverage: Max 3x for this setup
-                        - Stop Loss Distance: {abs(((best.get('stop_loss', 0) - best['current_price']) / best['current_price']) * 100):.2f}%
-                        """)
-                    
-                    # Chart
-                    st.markdown("---")
-                    st.markdown(f"#### 📈 {best['symbol']} Price Chart ({timeframe})")
+            # Additional Analysis
+            with st.expander("🔍 View Additional Analysis", expanded=False):
+                st.markdown(f"""
+                **Market Context:**
+                - 24h Change: {best.get('change_24h', 0):+.2f}%
+                - 24h Volume: ${best.get('volume_24h', 0):,.0f}
+                - Volatility: {best['volatility']:.2f}%
+                - Volume Ratio: {best['volume_ratio']:.2f}x
+                
+                **Risk Management:**
+                - Position Size: 1-2% of portfolio
+                - Suggested Leverage: Max 3x
+                - Stop Loss Distance: {abs(((best.get('stop_loss', 0) - best['current_price']) / best['current_price']) * 100):.2f}%
+                """)
+            
+            # Chart
+            st.markdown("---")
+            st.markdown(f"#### 📈 {best['symbol']} Price Chart ({timeframe})")
+            
+            try:
+                df = scanner.fetch_ohlcv_data(best['symbol'], timeframe, limit=100)
+                if df is None or len(df) < 20:
+                    df = scanner._generate_synthetic_chart(best['symbol'], limit=100)
+            except:
+                df = scanner._generate_synthetic_chart(best['symbol'], limit=100)
 
-                    # Safe chart data fetching
-                    try:
-                        df = scanner.fetch_ohlcv_data(best['symbol'], timeframe, limit=100)
-                        if df is None or len(df) < 20:
-                            df = scanner._generate_synthetic_chart(best['symbol'], limit=100)
-                    except:
-                        df = scanner._generate_synthetic_chart(best['symbol'], limit=100)
+            if df is not None:
+                df = scanner.calculate_indicators(df)
+                fig = make_subplots(rows=3, cols=1, shared_xaxes=True, vertical_spacing=0.05, row_heights=[0.5, 0.25, 0.25])
+                fig.add_trace(go.Candlestick(x=df.index, open=df['open'], high=df['high'], low=df['low'], close=df['close'], name='Price'), row=1, col=1)
+                if 'ema_9' in df.columns:
+                    fig.add_trace(go.Scatter(x=df.index, y=df['ema_9'], name='EMA 9', line=dict(color='blue', width=1.5)), row=1, col=1)
+                if 'ema_21' in df.columns:
+                    fig.add_trace(go.Scatter(x=df.index, y=df['ema_21'], name='EMA 21', line=dict(color='orange', width=1.5)), row=1, col=1)
+                if 'bb_upper' in df.columns and 'bb_lower' in df.columns:
+                    fig.add_trace(go.Scatter(x=df.index, y=df['bb_upper'], name='BB Upper', line=dict(color='gray', width=1, dash='dash')), row=1, col=1)
+                    fig.add_trace(go.Scatter(x=df.index, y=df['bb_lower'], name='BB Lower', line=dict(color='gray', width=1, dash='dash')), row=1, col=1)
+                fig.add_hline(y=best['current_price'], line_dash="solid", line_color="yellow", row=1, col=1, annotation_text="Entry", annotation_position="left")
+                if best.get('stop_loss'):
+                    fig.add_hline(y=best['stop_loss'], line_dash="dash", line_color="red", row=1, col=1, annotation_text="SL", annotation_position="left")
+                if best.get('take_profit_1'):
+                    fig.add_hline(y=best['take_profit_1'], line_dash="dash", line_color="green", row=1, col=1, annotation_text="TP", annotation_position="left")
+                colors = ['red' if row['open'] > row['close'] else 'green' for _, row in df.iterrows()]
+                fig.add_trace(go.Bar(x=df.index, y=df['volume'], name='Volume', marker_color=colors), row=2, col=1)
+                if 'rsi' in df.columns:
+                    fig.add_trace(go.Scatter(x=df.index, y=df['rsi'], name='RSI', line=dict(color='purple')), row=3, col=1)
+                    fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
+                    fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
+                fig.update_layout(height=600, xaxis_rangeslider_visible=False, showlegend=True, template='plotly_dark', title=f"{best['symbol']} - {timeframe} Chart")
+                st.plotly_chart(fig, use_container_width=True)
+            
+            st.markdown("---")
+    
+    # ===== ALL SIGNALS SUMMARY TABLE (OUTSIDE THE FOR LOOP) =====
+    st.markdown("### 📊 All Signals Summary")
+    st.caption("Click on any signal tab above for detailed analysis")
+    
+    signals_df = pd.DataFrame([{
+        'Symbol': s['symbol'],
+        'Signal': s['signal'],
+        'Strength': s['strength'],
+        'Confidence': f"{s['confidence']}%",
+        'Score': f"{s['total_score']}/{s['max_score']}",
+        'Price': f"${s['current_price']:,.4f}",
+        '24h %': f"{s.get('change_24h', 0):+.2f}%",
+        'RSI': f"{s['rsi']:.1f}",
+        'R:R': f"1:{s['risk_reward_ratio']:.2f}",
+        'Quality': '⭐' * min(5, int(s['confidence']/20) + (1 if s['strength']=='STRONG' else 0))
+    } for s in signals])
+    
+    def color_signal(val):
+        if val == 'LONG':
+            return 'background: #11998e; color: white; font-weight: bold'
+        elif val == 'SHORT':
+            return 'background: #eb3349; color: white; font-weight: bold'
+        return ''
+    
+    def color_strength(val):
+        if val == 'STRONG':
+            return 'background-color: #ffd700; color: black; font-weight: bold'
+        elif val == 'MODERATE':
+            return 'background-color: #ffa500; color: black'
+        return ''
+    
+    styled_df = signals_df.style.map(color_signal, subset=['Signal']).map(color_strength, subset=['Strength'])
+    st.dataframe(styled_df, use_container_width=True, height=400)
+    
+    st.caption(f"Last scan: {st.session_state.last_update.strftime('%Y-%m-%d %H:%M:%S')}")
 
-                    if df is not None:
-                        df = scanner.calculate_indicators(df)
-                        
-                        fig = make_subplots(
-                            rows=3, cols=1,
-                            shared_xaxes=True,
-                            vertical_spacing=0.05,
-                            row_heights=[0.5, 0.25, 0.25]
-                        )
-                        
-                        # Candlestick
-                        fig.add_trace(
-                            go.Candlestick(
-                                x=df.index, open=df['open'], high=df['high'],
-                                low=df['low'], close=df['close'], name='Price'
-                            ),
-                            row=1, col=1
-                        )
-                        
-                        # EMAs - check if columns exist
-                        if 'ema_9' in df.columns:
-                            fig.add_trace(go.Scatter(x=df.index, y=df['ema_9'], name='EMA 9', 
-                                                    line=dict(color='blue', width=1.5)), row=1, col=1)
-                        if 'ema_21' in df.columns:
-                            fig.add_trace(go.Scatter(x=df.index, y=df['ema_21'], name='EMA 21', 
-                                                    line=dict(color='orange', width=1.5)), row=1, col=1)
-                        
-                        # Bollinger Bands - check if exist
-                        if 'bb_upper' in df.columns and 'bb_lower' in df.columns:
-                            fig.add_trace(go.Scatter(x=df.index, y=df['bb_upper'], name='BB Upper', 
-                                                    line=dict(color='gray', width=1, dash='dash')), row=1, col=1)
-                            fig.add_trace(go.Scatter(x=df.index, y=df['bb_lower'], name='BB Lower', 
-                                                    line=dict(color='gray', width=1, dash='dash')), row=1, col=1)
-                        
-                        # Entry/SL/TP lines
-                        fig.add_hline(y=best['current_price'], line_dash="solid", 
-                                     line_color="yellow", row=1, col=1, 
-                                     annotation_text="Entry", annotation_position="left")
-                        
-                        if best.get('stop_loss'):
-                            fig.add_hline(y=best['stop_loss'], line_dash="dash", 
-                                         line_color="red", row=1, col=1,
-                                         annotation_text="SL", annotation_position="left")
-                        
-                        if best.get('take_profit_1'):
-                            fig.add_hline(y=best['take_profit_1'], line_dash="dash", 
-                                         line_color="green", row=1, col=1,
-                                         annotation_text="TP", annotation_position="left")
-                        
-                        # Volume
-                        colors = ['red' if row['open'] > row['close'] else 'green' for _, row in df.iterrows()]
-                        fig.add_trace(go.Bar(x=df.index, y=df['volume'], name='Volume', 
-                                            marker_color=colors), row=2, col=1)
-                        
-                        # RSI
-                        if 'rsi' in df.columns:
-                            fig.add_trace(go.Scatter(x=df.index, y=df['rsi'], name='RSI', 
-                                                    line=dict(color='purple')), row=3, col=1)
-                            fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
-                            fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
-                        
-                        fig.update_layout(
-                            height=600,
-                            xaxis_rangeslider_visible=False,
-                            showlegend=True,
-                            template='plotly_dark',
-                            title=f"{best['symbol']} - {timeframe} Chart"
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
-                    
-                    st.markdown("---")
-            
-            # ===== ALL SIGNALS SUMMARY TABLE =====
-            st.markdown("### 📊 All Signals Summary")
-            st.caption("Click on any signal tab above for detailed analysis")
-            
-            # Create summary dataframe
-            signals_df = pd.DataFrame([{
-                'Symbol': s['symbol'],
-                'Signal': s['signal'],
-                'Strength': s['strength'],
-                'Confidence': f"{s['confidence']}%",
-                'Score': f"{s['total_score']}/{s['max_score']}",
-                'Price': f"${s['current_price']:,.4f}",
-                '24h %': f"{s.get('change_24h', 0):+.2f}%",
-                'RSI': f"{s['rsi']:.1f}",
-                'R:R': f"1:{s['risk_reward_ratio']:.2f}",
-                'Quality': '⭐' * min(5, int(s['confidence']/20) + (1 if s['strength']=='STRONG' else 0))
-            } for s in signals])
-            
-            # Color coding
-            def color_signal(val):
-                if val == 'LONG':
-                    return 'background: #11998e; color: white; font-weight: bold'
-                elif val == 'SHORT':
-                    return 'background: #eb3349; color: white; font-weight: bold'
-                return ''
-            
-            def color_strength(val):
-                if val == 'STRONG':
-                    return 'background-color: #ffd700; color: black; font-weight: bold'
-                elif val == 'MODERATE':
-                    return 'background-color: #ffa500; color: black'
-                return ''
-            
-            styled_df = signals_df.style.map(color_signal, subset=['Signal']).map(color_strength, subset=['Strength'])
-            st.dataframe(styled_df, use_container_width=True, height=400)
-            
-            st.caption(f"Last scan: {st.session_state.last_update.strftime('%Y-%m-%d %H:%M:%S')}")
-            
-        else:
-            st.warning(f"⚠️ No signals found with confidence ≥ {min_confidence}%")
-            st.info("💡 Try changing scan mode or lowering minimum confidence")
+else:
+    st.warning(f"⚠️ No signals found with confidence ≥ {min_confidence}%")
+    st.info("💡 Try changing scan mode or lowering minimum confidence")
     
     if auto_scan:
         time.sleep(120)
