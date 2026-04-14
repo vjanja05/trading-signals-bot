@@ -1428,88 +1428,89 @@ else:
                         """)
                     
                     # Chart
-st.markdown("---")
-st.markdown(f"#### 📈 {best['symbol']} Price Chart ({timeframe})")
+                    st.markdown("---")
+                    st.markdown(f"#### 📈 {best['symbol']} Price Chart ({timeframe})")
 
-# Safe chart data fetching
-try:
-    df = scanner.fetch_ohlcv_data(best['symbol'], timeframe, limit=100)
-    if df is None or len(df) < 20:
-        df = scanner._generate_synthetic_chart(best['symbol'], limit=100)
-except:
-    df = scanner._generate_synthetic_chart(best['symbol'], limit=100)
+                    # Safe chart data fetching
+                    try:
+                        df = scanner.fetch_ohlcv_data(best['symbol'], timeframe, limit=100)
+                        if df is None or len(df) < 20:
+                            df = scanner._generate_synthetic_chart(best['symbol'], limit=100)
+                    except:
+                        df = scanner._generate_synthetic_chart(best['symbol'], limit=100)
 
-if df is not None:
-    df = scanner.calculate_indicators(df)
-    
-    fig = make_subplots(
-        rows=3, cols=1,
-        shared_xaxes=True,
-        vertical_spacing=0.05,
-        row_heights=[0.5, 0.25, 0.25]
-    )
-    
-    # Candlestick
-    fig.add_trace(
-        go.Candlestick(
-            x=df.index, open=df['open'], high=df['high'],
-            low=df['low'], close=df['close'], name='Price'
-        ),
-        row=1, col=1
-    )
-    
-    # EMAs - check if columns exist
-    if 'ema_9' in df.columns:
-        fig.add_trace(go.Scatter(x=df.index, y=df['ema_9'], name='EMA 9', 
-                                line=dict(color='blue', width=1.5)), row=1, col=1)
-    if 'ema_21' in df.columns:
-        fig.add_trace(go.Scatter(x=df.index, y=df['ema_21'], name='EMA 21', 
-                                line=dict(color='orange', width=1.5)), row=1, col=1)
-    
-    # Bollinger Bands - check if exist
-    if 'bb_upper' in df.columns and 'bb_lower' in df.columns:
-        fig.add_trace(go.Scatter(x=df.index, y=df['bb_upper'], name='BB Upper', 
-                                line=dict(color='gray', width=1, dash='dash')), row=1, col=1)
-        fig.add_trace(go.Scatter(x=df.index, y=df['bb_lower'], name='BB Lower', 
-                                line=dict(color='gray', width=1, dash='dash')), row=1, col=1)
-    
-    # Entry/SL/TP lines
-    fig.add_hline(y=best['current_price'], line_dash="solid", 
-                 line_color="yellow", row=1, col=1, 
-                 annotation_text="Entry", annotation_position="left")
-    
-    if best.get('stop_loss'):
-        fig.add_hline(y=best['stop_loss'], line_dash="dash", 
-                     line_color="red", row=1, col=1,
-                     annotation_text="SL", annotation_position="left")
-    
-    if best.get('take_profit_1'):
-        fig.add_hline(y=best['take_profit_1'], line_dash="dash", 
-                     line_color="green", row=1, col=1,
-                     annotation_text="TP", annotation_position="left")
-    
-    # Volume
-    colors = ['red' if row['open'] > row['close'] else 'green' for _, row in df.iterrows()]
-    fig.add_trace(go.Bar(x=df.index, y=df['volume'], name='Volume', 
-                        marker_color=colors), row=2, col=1)
-    
-    # RSI
-    if 'rsi' in df.columns:
-        fig.add_trace(go.Scatter(x=df.index, y=df['rsi'], name='RSI', 
-                                line=dict(color='purple')), row=3, col=1)
-        fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
-        fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
-    
-    fig.update_layout(
-        height=600,
-        xaxis_rangeslider_visible=False,
-        showlegend=True,
-        template='plotly_dark',
-        title=f"{best['symbol']} - {timeframe} Chart"
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
-    st.markdown("---")
+                    if df is not None:
+                        df = scanner.calculate_indicators(df)
+                        
+                        fig = make_subplots(
+                            rows=3, cols=1,
+                            shared_xaxes=True,
+                            vertical_spacing=0.05,
+                            row_heights=[0.5, 0.25, 0.25]
+                        )
+                        
+                        # Candlestick
+                        fig.add_trace(
+                            go.Candlestick(
+                                x=df.index, open=df['open'], high=df['high'],
+                                low=df['low'], close=df['close'], name='Price'
+                            ),
+                            row=1, col=1
+                        )
+                        
+                        # EMAs - check if columns exist
+                        if 'ema_9' in df.columns:
+                            fig.add_trace(go.Scatter(x=df.index, y=df['ema_9'], name='EMA 9', 
+                                                    line=dict(color='blue', width=1.5)), row=1, col=1)
+                        if 'ema_21' in df.columns:
+                            fig.add_trace(go.Scatter(x=df.index, y=df['ema_21'], name='EMA 21', 
+                                                    line=dict(color='orange', width=1.5)), row=1, col=1)
+                        
+                        # Bollinger Bands - check if exist
+                        if 'bb_upper' in df.columns and 'bb_lower' in df.columns:
+                            fig.add_trace(go.Scatter(x=df.index, y=df['bb_upper'], name='BB Upper', 
+                                                    line=dict(color='gray', width=1, dash='dash')), row=1, col=1)
+                            fig.add_trace(go.Scatter(x=df.index, y=df['bb_lower'], name='BB Lower', 
+                                                    line=dict(color='gray', width=1, dash='dash')), row=1, col=1)
+                        
+                        # Entry/SL/TP lines
+                        fig.add_hline(y=best['current_price'], line_dash="solid", 
+                                     line_color="yellow", row=1, col=1, 
+                                     annotation_text="Entry", annotation_position="left")
+                        
+                        if best.get('stop_loss'):
+                            fig.add_hline(y=best['stop_loss'], line_dash="dash", 
+                                         line_color="red", row=1, col=1,
+                                         annotation_text="SL", annotation_position="left")
+                        
+                        if best.get('take_profit_1'):
+                            fig.add_hline(y=best['take_profit_1'], line_dash="dash", 
+                                         line_color="green", row=1, col=1,
+                                         annotation_text="TP", annotation_position="left")
+                        
+                        # Volume
+                        colors = ['red' if row['open'] > row['close'] else 'green' for _, row in df.iterrows()]
+                        fig.add_trace(go.Bar(x=df.index, y=df['volume'], name='Volume', 
+                                            marker_color=colors), row=2, col=1)
+                        
+                        # RSI
+                        if 'rsi' in df.columns:
+                            fig.add_trace(go.Scatter(x=df.index, y=df['rsi'], name='RSI', 
+                                                    line=dict(color='purple')), row=3, col=1)
+                            fig.add_hline(y=70, line_dash="dash", line_color="red", row=3, col=1)
+                            fig.add_hline(y=30, line_dash="dash", line_color="green", row=3, col=1)
+                        
+                        fig.update_layout(
+                            height=600,
+                            xaxis_rangeslider_visible=False,
+                            showlegend=True,
+                            template='plotly_dark',
+                            title=f"{best['symbol']} - {timeframe} Chart"
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                    
+                    st.markdown("---")
             
             # ===== ALL SIGNALS SUMMARY TABLE =====
             st.markdown("### 📊 All Signals Summary")
@@ -1596,7 +1597,7 @@ if df is not None:
             """, unsafe_allow_html=True)
 
     st.success("✅ Premium Access Active - Welcome back!")
-
+    
 # Footer
 st.markdown("---")
 st.markdown("""
