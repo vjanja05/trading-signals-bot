@@ -1090,7 +1090,7 @@ else:
     with col4:
         min_confidence = st.slider(
             "Min Confidence",
-            50, 95, 65, 5,
+            30, 95, 45, 5,
             help="Only show signals above this confidence"
         )
     
