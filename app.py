@@ -1489,48 +1489,94 @@ else:
                     
                     st.markdown("---")
             
-            # ===== ALL SIGNALS SUMMARY TABLE =====
+            # ===== ALL SIGNALS SUMMARY =====
             st.markdown("### 📊 All Signals Summary")
-            st.caption("Click on any signal tab above for detailed analysis")
+            st.caption("Detailed view of all detected trading opportunities")
+
+            # Show count metrics
+            long_count = sum(1 for s in signals if s['signal'] == 'LONG')
+            short_count = len(signals) - long_count
+
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("📊 Total Signals", len(signals))
+            with col2:
+                st.metric("🟢 LONG", long_count)
+            with col3:
+                st.metric("🔴 SHORT", short_count)
+            with col4:
+                avg_conf = sum(s['confidence'] for s in signals) // len(signals)
+                st.metric("📈 Avg Confidence", f"{avg_conf}%")
+
+            st.markdown("---")
             
-            # Create summary dataframe
-            signals_df = pd.DataFrame([{
-                'Symbol': s['symbol'],
-                'Signal': s['signal'],
-                'Strength': s['strength'],
-                'Confidence': f"{s['confidence']}%",
-                'Score': f"{s['total_score']}/{s['max_score']}",
-                'Price': f"${s['current_price']:,.4f}",
-                '24h %': f"{s.get('change_24h', 0):+.2f}%",
-                'RSI': f"{s['rsi']:.1f}",
-                'R:R': f"1:{s['risk_reward_ratio']:.2f}",
-                'Quality': '⭐' * min(5, int(s['confidence']/20) + (1 if s['strength']=='STRONG' else 0))
-            } for s in signals])
-            
-            # Color coding
-            def color_signal(val):
-                if val == 'LONG':
-                    return 'background: #11998e; color: white; font-weight: bold'
-                elif val == 'SHORT':
-                    return 'background: #eb3349; color: white; font-weight: bold'
-                return ''
-            
-            def color_strength(val):
-                if val == 'STRONG':
-                    return 'background-color: #ffd700; color: black; font-weight: bold'
-                elif val == 'MODERATE':
-                    return 'background-color: #ffa500; color: black'
-                return ''
-            
-            styled_df = signals_df.style.map(color_signal, subset=['Signal']).map(color_strength, subset=['Strength'])
-            st.dataframe(styled_df, use_container_width=True, height=400)
+            # Display signals in beautiful cards
+            for s in signals:
+                signal_color = "#11998e" if s['signal'] == "LONG" else "#eb3349"
+                signal_emoji = "📈" if s['signal'] == "LONG" else "📉"
+                strength_color = "#ffd700" if s['strength'] == "STRONG" else "#ffa500" if s['strength'] == "MODERATE" else "#888"
+                
+                # Quality stars
+                quality_stars = '⭐' * min(5, int(s['confidence']/20) + (1 if s['strength']=='STRONG' else 0))
+                
+                st.markdown(f"""
+                <div style="
+                    border-left: 5px solid {signal_color};
+                    border-radius: 8px;
+                    padding: 15px 20px;
+                    margin-bottom: 12px;
+                    background: linear-gradient(135deg, rgba(30,30,30,0.9) 0%, rgba(20,20,20,0.8) 100%);
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                ">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <strong style="font-size: 18px;">{signal_emoji} {s['symbol']}</strong>
+                            <span style="
+                                margin-left: 15px; 
+                                background: {strength_color}; 
+                                color: black; 
+                                padding: 3px 12px; 
+                                border-radius: 15px;
+                                font-size: 12px;
+                                font-weight: bold;
+                            ">{s['strength']}</span>
+                            <span style="margin-left: 10px; color: {signal_color}; font-weight: bold;">{s['signal']}</span>
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                            <span style="color: #aaa; font-size: 14px;">{quality_stars}</span>
+                            <span style="
+                                background: {signal_color}; 
+                                color: white; 
+                                padding: 6px 18px; 
+                                border-radius: 20px; 
+                                font-weight: bold;
+                                font-size: 14px;
+                            ">
+                                {s['confidence']}%
+                            </span>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 25px; margin-top: 12px; flex-wrap: wrap;">
+                        <div>💰 <strong>${s['current_price']:,.4f}</strong></div>
+                        <div>🛑 <span style="color: #f45c43;">${s['stop_loss']:,.4f}</span></div>
+                        <div>🎯 <span style="color: #38ef7d;">${s['take_profit_1']:,.4f}</span></div>
+                        <div>📊 24h: <strong style="color: {'#38ef7d' if s.get('change_24h', 0) > 0 else '#f45c43'}">{s.get('change_24h', 0):+.2f}%</strong></div>
+                        <div>📈 RSI: {s['rsi']:.0f}</div>
+                        <div>💹 R:R <strong>1:{s['risk_reward_ratio']:.2f}</strong></div>
+                        <div>📊 Score: {s['total_score']}/{s['max_score']}</div>
+                    </div>
+                    <div style="margin-top: 10px; font-size: 13px; color: #aaa;">
+                        {s['reasons'][0] if s['reasons'] else ''}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
             
             st.caption(f"Last scan: {st.session_state.last_update.strftime('%Y-%m-%d %H:%M:%S')}")
             
         else:
             st.warning(f"⚠️ No signals found with confidence ≥ {min_confidence}%")
             st.info("💡 Try changing scan mode or lowering minimum confidence")
-    
+
     if auto_scan:
         time.sleep(120)
         st.rerun()
