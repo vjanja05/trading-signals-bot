@@ -714,7 +714,7 @@ if 'access_expiry' not in st.session_state:
 if 'password_manager' not in st.session_state:
     st.session_state.password_manager = PasswordManager()
     # Demo passwords
-    st.session_state.password_manager.valid_passwords["DEMO123"] = {
+    st.session_state.password_manager.valid_passwords["Honore3D"] = {
         'created': datetime.now(),
         'expiry': datetime.now() + timedelta(days=30),
         'used': False
@@ -1006,7 +1006,7 @@ if not st.session_state.access_granted:
         col_a, col_b = st.columns(2)
         with col_a:
             if st.button("🔓 Unlock Premium Access", use_container_width=True, type="primary"):
-                admin_password = "password.me"
+                admin_password = "ihaveit.me"
                 
                 if access_password == admin_password:
                     st.session_state.access_granted = True
