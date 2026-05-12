@@ -359,7 +359,7 @@ class AdvancedMarketScanner:
         return None
     
     def scan_market_wide(self, scan_mode='top_volume', max_pairs=50, timeframe='1h', min_confidence=65):
-        """Scan market-wide using different strategies"""
+        """Scan market-wide using multi-timeframe confirmation for higher accuracy"""
         
         # Get pairs based on scan mode
         if scan_mode == 'top_volume':
@@ -371,13 +371,13 @@ class AdvancedMarketScanner:
         elif scan_mode == 'trending':
             pairs = self.get_trending_pairs(limit=max_pairs)
             scan_desc = f"Top {max_pairs} trending pairs"
-        else:  # 'all_market'
+        else:
             pairs = self.get_top_volume_pairs(limit=max_pairs * 2)
             scan_desc = f"Market-wide ({len(pairs)} pairs)"
         
         if not pairs:
             return [], scan_desc
-        
+    
         # Store market stats
         st.session_state.market_stats = {
             'total_pairs_scanned': len(pairs),
@@ -388,31 +388,192 @@ class AdvancedMarketScanner:
         
         signals = []
         
-        # Parallel scanning with progress tracking
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            future_to_symbol = {}
-            
-            for pair_info in pairs:
-                future = executor.submit(self.scan_pair, pair_info['symbol'], timeframe)
-                future_to_symbol[future] = pair_info
-            
-            for future in as_completed(future_to_symbol):
-                pair_info = future_to_symbol[future]
-                try:
-                    signal = future.result()
-                    if signal and signal['confidence'] >= min_confidence and signal['signal'] != "NEUTRAL":
-                        # Add market data to signal
-                        signal['volume_24h'] = pair_info['volume']
-                        signal['change_24h'] = pair_info['change_24h']
-                        signals.append(signal)
-                except:
-                    pass
+        progress = st.progress(0)
+        status = st.empty()
         
-        # Sort by confidence and score
+        for i, pair_info in enumerate(pairs):
+            progress.progress((i + 1) / len(pairs))
+            status.text(f"🔍 Analyzing {pair_info['symbol']} ({i+1}/{len(pairs)})")
+            
+            # MULTI-TIMEFRAME ANALYSIS
+            signal = self._multi_timeframe_analysis(pair_info)
+            
+            if signal and signal['confidence'] >= min_confidence and signal['signal'] != "NEUTRAL":
+                signal['volume_24h'] = pair_info['volume']
+                signal['change_24h'] = pair_info['change_24h']
+                signals.append(signal)
+        
+        progress.empty()
+        status.empty()
+    
         signals.sort(key=lambda x: (x['strength'] == 'STRONG', abs(x['total_score']), x['confidence']), reverse=True)
-        
+    
         return signals, scan_desc
 
+    def _multi_timeframe_analysis(self, pair_info):
+        """Analyze using multiple timeframes for better entry timing"""
+        symbol = pair_info['symbol']
+        price = pair_info.get('price', 0)
+        
+        if price <= 0:
+            return None
+        
+        try:
+            # Get multiple timeframe data
+            df_5m = self.fetch_ohlcv_data(symbol, '5m', 50)
+            df_15m = self.fetch_ohlcv_data(symbol, '15m', 50)
+            df_1h = self.fetch_ohlcv_data(symbol, '1h', 50)
+            
+            if df_5m is None or df_1h is None:
+                return None
+            
+           # Calculate indicators for each timeframe
+            if df_5m is not None and len(df_5m) >= 30:
+                df_5m = self.calculate_indicators(df_5m)
+            if df_15m is not None and len(df_15m) >= 30:
+                df_15m = self.calculate_indicators(df_15m)
+            if df_1h is not None and len(df_1h) >= 30:
+                df_1h = self.calculate_indicators(df_1h)
+        
+            score = 0
+            reasons = []
+        
+            # 1. SHORT-TERM MOMENTUM CHECK (5m chart) - HIGHEST WEIGHT
+            if df_5m is not None:
+                close_5m = df_5m['close'].values[-5:]
+                mom_5m = (close_5m[-1] - close_5m[0]) / close_5m[0] * 100
+                
+                if mom_5m > 0.3:
+                    score += 5
+                    reasons.append(f"⚡ 5m momentum: +{mom_5m:.2f}%")
+                elif mom_5m > 0.1:
+                    score += 3
+                    reasons.append(f"📈 5m slight up: +{mom_5m:.2f}%")
+                elif mom_5m < -0.3:
+                    score -= 5
+                    reasons.append(f"⚡ 5m momentum: {mom_5m:.2f}%")
+                elif mom_5m < -0.1:
+                    score -= 3
+                    reasons.append(f"📉 5m slight down: {mom_5m:.2f}%")
+                
+                # Check if price just bounced off EMA
+                if 'ema_21' in df_5m.columns:
+                    last_low = df_5m['low'].values[-3:].min()
+                    ema_21 = df_5m['ema_21'].values[-1]
+                    if last_low <= ema_21 * 1.001 and price > ema_21:
+                        score += 3
+                        reasons.append("🎯 5m EMA bounce")
+            
+            # 2. MEDIUM-TERM TREND (15m chart)
+            if df_15m is not None and 'ema_9' in df_15m.columns and 'ema_21' in df_15m.columns:
+                ema9_15 = df_15m['ema_9'].values[-1]
+                ema21_15 = df_15m['ema_21'].values[-1]
+                
+                if ema9_15 > ema21_15:
+                    score += 3
+                    reasons.append("📊 15m EMA bullish")
+                else:
+                    score -= 3
+                    reasons.append("📊 15m EMA bearish")
+        
+            # 3. LONG-TERM TREND (1h chart)
+            if df_1h is not None:
+                if 'ema_9' in df_1h.columns and 'ema_21' in df_1h.columns:
+                    ema9_1h = df_1h['ema_9'].values[-1]
+                    ema21_1h = df_1h['ema_21'].values[-1]
+                    
+                    if ema9_1h > ema21_1h:
+                        score += 2
+                        reasons.append("📈 1h trend bullish")
+                    else:
+                        score -= 2
+                        reasons.append("📉 1h trend bearish")
+               
+                # RSI check on 1h
+                if 'rsi' in df_1h.columns:
+                    rsi_1h = df_1h['rsi'].values[-1]
+                    if rsi_1h < 35:
+                        score += 4
+                        reasons.append(f"💪 1h RSI oversold: {rsi_1h:.0f}")
+                    elif rsi_1h > 65:
+                        score -= 4
+                        reasons.append(f"⚠️ 1h RSI overbought: {rsi_1h:.0f}")
+            
+            # 4. VOLUME CONFIRMATION
+            if df_5m is not None and len(df_5m) >= 20:
+                recent_vol = df_5m['volume'].values[-5:].mean()
+                avg_vol = df_5m['volume'].values[-20:].mean()
+                vol_ratio = recent_vol / avg_vol if avg_vol > 0 else 1
+                
+                if vol_ratio > 2.0:
+                    if score > 0:
+                        score += 3
+                        reasons.append(f"💎 Volume spike ({vol_ratio:.1f}x) - bullish")
+                    elif score < 0:
+                        score -= 3
+                        reasons.append(f"💎 Volume spike ({vol_ratio:.1f}x) - bearish")
+            
+            # 5. PRICE POSITION (near support/resistance)
+            if df_1h is not None and 'bb_lower' in df_1h.columns:
+                bb_lower = df_1h['bb_lower'].values[-1]
+                bb_upper = df_1h['bb_upper'].values[-1]
+                
+                bb_position = (price - bb_lower) / (bb_upper - bb_lower) if (bb_upper - bb_lower) > 0 else 0.5
+                
+                if bb_position < 0.25:
+                    score += 3
+                    reasons.append("📍 Near lower BB - oversold area")
+                elif bb_position > 0.75:
+                    score -= 3
+                    reasons.append("📍 Near upper BB - overbought area")
+            
+            # DETERMINE SIGNAL
+            if abs(score) < 6:  # Higher threshold for better signals
+                return None
+            
+            signal_type = "LONG" if score > 0 else "SHORT"
+            confidence = min(60 + abs(score) * 3, 95)
+            strength = "STRONG" if abs(score) >= 12 else "MODERATE" if abs(score) >= 8 else "WEAK"
+        
+            # TIGHTER SL for better R:R
+            if signal_type == "LONG":
+                stop_loss = price * 0.985   # -1.5%
+                take_profit_1 = price * 1.025  # +2.5%
+                take_profit_2 = price * 1.04   # +4%
+            else:
+                stop_loss = price * 1.015   # +1.5%
+                take_profit_1 = price * 0.975  # -2.5%
+                take_profit_2 = price * 0.96   # -4%
+            
+            risk = abs(price - stop_loss)
+            reward = abs(take_profit_1 - price)
+            rr_ratio = reward / risk if risk > 0 else 1.8
+            
+            return {
+                'symbol': symbol,
+                'signal': signal_type,
+                'strength': strength,
+                'confidence': int(confidence),
+                'current_price': price,
+                'stop_loss': stop_loss,
+                'take_profit_1': take_profit_1,
+                'take_profit_2': take_profit_2,
+                'risk_reward_ratio': rr_ratio,
+                'reasons': reasons,
+                'confirmations': reasons[:4],
+                'rsi': df_1h['rsi'].values[-1] if df_1h is not None and 'rsi' in df_1h.columns else 50,
+                'volume_ratio': vol_ratio if 'vol_ratio' in locals() else 1.0,
+                'volatility': abs(pair_info.get('change_24h', 2)),
+                'momentum_10': mom_5m if 'mom_5m' in locals() else 0,
+                'bullish_score': max(0, score),
+                'bearish_score': abs(min(0, score)),
+                'total_score': score,
+                'max_score': 20,
+                'timestamp': datetime.now()
+            }
+        
+        except Exception as e:
+            return None
 # Page configuration
 st.set_page_config(
     page_title="Forex Big Bot Signals",
