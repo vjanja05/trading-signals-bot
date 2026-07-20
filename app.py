@@ -1167,7 +1167,7 @@ if not st.session_state.access_granted:
         col_a, col_b = st.columns(2)
         with col_a:
             if st.button("🔓 Unlock Premium Access", use_container_width=True, type="primary"):
-                admin_password = "ihaveit.me"
+                admin_password = "%TYR&7ytr5"
                 
                 if access_password == admin_password:
                     st.session_state.access_granted = True
