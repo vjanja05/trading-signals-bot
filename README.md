@@ -5,7 +5,7 @@ Premium trading signals bot with 25 USDT BEP20 payment system.
 
 ## Features
 - Real-time AI trading signals for multiple cryptocurrencies
-- 25 USDT BEP20 payment for 30 days access
+- 30 USDT BEP20 payment for 30 days access
 - Telegram integration for payment verification
 - Multiple timeframes (15m, 1h, 4h, 1d)
 - Entry, Stop Loss, and Take Profit levels
