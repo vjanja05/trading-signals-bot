@@ -8,4 +8,4 @@ services:
       - key: YOUR_WALLET
         value: 0x87ea9fc331bbe75fdae07f291046920b878e1367
       - key: ACCESS_DURATION
-        value: "2592000"
+        value: "3092000"
