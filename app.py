@@ -24,8 +24,8 @@ load_dotenv()
 
 # ===== PAYMENT CONFIGURATION =====
 YOUR_WALLET = os.getenv("YOUR_WALLET", "0x87ea9fc331bbe75fdae07f291046920b878e1367")
-ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 2592000))
-ACCESS_PRICE_USDT = 25
+ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 3092000))
+ACCESS_PRICE_USDT = 30
 
 # ===== PASSWORD MANAGEMENT SYSTEM =====
 class PasswordManager:
@@ -520,7 +520,7 @@ class AdvancedMarketScanner:
                 
                 bb_position = (price - bb_lower) / (bb_upper - bb_lower) if (bb_upper - bb_lower) > 0 else 0.5
                 
-                if bb_position < 0.25:
+                if bb_position < 0.30:
                     score += 3
                     reasons.append("📍 Near lower BB - oversold area")
                 elif bb_position > 0.75:
@@ -538,7 +538,7 @@ class AdvancedMarketScanner:
             # TIGHTER SL for better R:R
             if signal_type == "LONG":
                 stop_loss = price * 0.985   # -1.5%
-                take_profit_1 = price * 1.025  # +2.5%
+                take_profit_1 = price * 1.030  # +2.5%
                 take_profit_2 = price * 1.04   # +4%
             else:
                 stop_loss = price * 1.015   # +1.5%
@@ -758,7 +758,7 @@ st.markdown("""
         background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
         border: 2px dashed #667eea;
         border-radius: 15px;
-        padding: 25px;
+        padding: 30px;
         margin: 20px 0;
         text-align: center;
     }
@@ -807,7 +807,7 @@ st.markdown("""
     /* Guarantee Box */
     .guarantee-box {
         background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-        padding: 25px;
+        padding: 30px;
         border-radius: 15px;
         color: white;
         text-align: center;
@@ -825,7 +825,7 @@ st.markdown("""
     .faq-answer {
         color: #666;
         line-height: 1.6;
-        margin-bottom: 25px;
+        margin-bottom: 30px;
     }
     
     /* Signal Preview */
@@ -1040,7 +1040,7 @@ if not st.session_state.access_granted:
         st.markdown("""
         <div class="pricing-card">
             <h2 style="margin:0; font-size: 32px;">Premium Access</h2>
-            <div class="price-tag">25 USDT</div>
+            <div class="price-tag">30 USDT</div>
             <div class="price-period">One-time payment • 30 days access</div>
             <hr style="margin: 30px 0; opacity: 0.3;">
             <div style="text-align: left; padding: 0 20px;">
@@ -1071,7 +1071,7 @@ if not st.session_state.access_granted:
             <div class="step-content">
                 <div class="step-title">Send Payment</div>
                 <div class="step-description">
-                    Send exactly 25 USDT (BEP20) to the wallet address on the right.
+                    Send exactly 30 USDT (BEP20) to the wallet address on the right.
                 </div>
             </div>
         </div>
@@ -1103,7 +1103,7 @@ if not st.session_state.access_granted:
         st.markdown("""
         <div class="wallet-box">
             <strong>Network:</strong> BEP20 (Binance Smart Chain)<br>
-            <strong>Amount:</strong> 25 USDT<br>
+            <strong>Amount:</strong> 30 USDT<br>
             <strong>Wallet Address:</strong>
             <div class="wallet-address-display">
         """ + YOUR_WALLET + """
@@ -1209,7 +1209,7 @@ if not st.session_state.access_granted:
         st.markdown("""
         <div class="testimonial-card">
             <div class="testimonial-text">
-                "The AI scanner finds opportunities I would never spot manually. Saved me hours of analysis every day. Best $25 I've ever spent."
+                "The AI scanner finds opportunities I would never spot manually. Saved me hours of analysis every day. Best $30 I've ever spent."
             </div>
             <div class="testimonial-author">
                 — Sarah K. • Professional Trader
@@ -1303,7 +1303,7 @@ else:
     with col2:
         max_pairs = st.selectbox(
             "Pairs to Scan",
-            [5, 10, 25, 50, 100, 200, 500],
+            [5, 10, 30, 50, 100, 200, 500],
             index=3,  # Default to 50
             help="Number of pairs to analyze (more = longer scan time)"
         )
@@ -1579,7 +1579,7 @@ else:
                             rows=3, cols=1,
                             shared_xaxes=True,
                             vertical_spacing=0.05,
-                            row_heights=[0.5, 0.25, 0.25]
+                            row_heights=[0.5, 0.30, 0.30]
                         )
                         
                         # Candlestick
@@ -1717,7 +1717,7 @@ else:
                             </span>
                         </div>
                     </div>
-                    <div style="display: flex; gap: 25px; margin-top: 12px; flex-wrap: wrap;">
+                    <div style="display: flex; gap: 30px; margin-top: 12px; flex-wrap: wrap;">
                         <div>💰 <strong>${s['current_price']:,.4f}</strong></div>
                         <div>🛑 <span style="color: #f45c43;">${s['stop_loss']:,.4f}</span></div>
                         <div>🎯 <span style="color: #38ef7d;">${s['take_profit_1']:,.4f}</span></div>
