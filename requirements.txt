@@ -8,3 +8,4 @@ python-dotenv
 qrcode
 pillow
 requests
+supabase
