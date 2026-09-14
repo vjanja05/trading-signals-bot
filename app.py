@@ -1220,7 +1220,7 @@ if not st.session_state.access_granted:
     st.markdown("## ❓ Frequently Asked Questions")
     
     with st.expander("How quickly will I receive my password?"):
-        st.write("Within 5 minutes of sending payment and messaging us on Telegram. Most users receive access in under 2 minutes!")
+        st.write("Within 5 minutes of sending payment, the account chech and give you access. Most users receive access in under 2 minutes!")
     
     with st.expander("Can I use these signals on any exchange?"):
         st.write("Yes! Our signals work on Binance, Bybit, KuCoin, OKX, and any major cryptocurrency exchange.")
