@@ -6,7 +6,7 @@ services:
     startCommand: streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.enableCORS false --server.enableXsrfProtection false
     envVars:
       - key: YOUR_WALLET
-        value: 0x87ea9fc331bbe75fdae07f291046920b878e1367
+        value: 0xA6B72E65d66B4BaDa4D3c835278D74c6403A8616
       - key: ACCESS_DURATION
         value: "3092000"
       - key: SUPABASE_URL
@@ -22,7 +22,7 @@ services:
     startCommand: python worker.py
     envVars:
       - key: YOUR_WALLET
-        value: 0x87ea9fc331bbe75fdae07f291046920b878e1367
+        value: 0xA6B72E65d66B4BaDa4D3c835278D74c6403A8616
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_KEY
