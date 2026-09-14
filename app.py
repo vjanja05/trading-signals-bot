@@ -18,6 +18,7 @@ import secrets
 import requests
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from supabase import create_client
 
 # Load environment variables
 load_dotenv()
@@ -27,33 +28,59 @@ YOUR_WALLET = os.getenv("YOUR_WALLET", "0xA6B72E65d66B4BaDa4D3c835278D74c6403A86
 ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 3092000))
 ACCESS_PRICE_USDT = 30
 
-# ===== PASSWORD MANAGEMENT SYSTEM =====
-class PasswordManager:
-    def __init__(self):
-        self.valid_passwords = {}
-        self.used_passwords = set()
-        
-    def generate_password(self, days=30):
-        password = secrets.token_hex(4).upper()
-        expiry = datetime.now() + timedelta(days=days)
-        self.valid_passwords[password] = {
-            'created': datetime.now(),
-            'expiry': expiry,
-            'used': False
-        }
-        return password
-    
-    def verify_password(self, password):
-        if password in self.valid_passwords:
-            if not self.valid_passwords[password]['used']:
-                if datetime.now() <= self.valid_passwords[password]['expiry']:
-                    self.valid_passwords[password]['used'] = True
-                    return True, "Valid password"
-                else:
-                    return False, "Password expired"
-            else:
-                return False, "Password already used"
-        return False, "Invalid password"
+# ===== SUPABASE (persistent, shared access store — replaces the old
+# in-memory-per-session PasswordManager, which never actually worked
+# across different users) =====
+@st.cache_resource
+def get_supabase():
+    return create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_KEY"])
+
+sb = get_supabase()
+
+
+def create_pending_request():
+    """Reserve a unique micro-amount (e.g. 30.0047) for a new payer, so an
+    incoming on-chain transfer can be matched to exactly this request even
+    though BEP20 transfers carry no memo/reference field."""
+    import random
+    for _ in range(10):  # a handful of retries in case of a rare collision
+        amount = round(ACCESS_PRICE_USDT + random.uniform(0.0005, 0.0099), 4)
+        try:
+            res = sb.table("signal_access_requests").insert({
+                "expected_amount": amount,
+            }).execute()
+            return res.data[0]
+        except Exception:
+            continue
+    return None
+
+
+def check_request_status(request_id):
+    res = sb.table("signal_access_requests").select("*").eq("id", request_id).single().execute()
+    return res.data
+
+
+def verify_access_password(password):
+    """Checks a password against real, persisted, completed payments —
+    shared across every user/session, unlike the old per-session store."""
+    res = sb.table("signal_access_requests") \
+        .select("*") \
+        .eq("access_password", password) \
+        .eq("status", "completed") \
+        .execute()
+
+    if not res.data:
+        return False, "Invalid password", None
+
+    row = res.data[0]
+    expires_at = datetime.fromisoformat(row["access_expires_at"])
+    if expires_at.tzinfo is not None:
+        expires_at = expires_at.astimezone().replace(tzinfo=None)
+
+    if datetime.now() > expires_at:
+        return False, "Password expired", None
+
+    return True, "Valid password", expires_at
 
 class AdvancedMarketScanner:
     """Advanced market scanner that dynamically discovers and analyzes trading pairs"""
@@ -872,16 +899,10 @@ if 'access_granted' not in st.session_state:
     st.session_state.access_granted = False
 if 'access_expiry' not in st.session_state:
     st.session_state.access_expiry = None
-if 'password_manager' not in st.session_state:
-    st.session_state.password_manager = PasswordManager()
-    # Demo passwords
-    st.session_state.password_manager.valid_passwords["Honore3D"] = {
-        'created': datetime.now(),
-        'expiry': datetime.now() + timedelta(days=30),
-        'used': False
-    }
 if 'show_payment_section' not in st.session_state:
     st.session_state.show_payment_section = False
+if 'pending_request' not in st.session_state:
+    st.session_state.pending_request = None
 
 @st.cache_resource
 def get_scanner():
@@ -901,43 +922,43 @@ if not st.session_state.access_granted:
     st.markdown("""
     <div class="hero-section animate">
         <h1 class="hero-title">🚀 AI-Powered Trading Signals</h1>
-        <p class="hero-subtitle">Stop guessing. Start profiting with institutional-grade crypto signals.</p>
+        <p class="hero-subtitle">Real-time technical analysis across the crypto market — entries, stop-losses, and take-profits, computed live from exchange data.</p>
         <div style="margin-top: 30px;">
-            <span class="trust-badge">⭐ 4.9/5 from 2,500+ traders</span>
-            <span class="trust-badge">🔒 94% Success Rate</span>
             <span class="trust-badge">⚡ Real-time Alerts</span>
+            <span class="trust-badge">📊 Multi-Indicator Analysis</span>
+            <span class="trust-badge">🔓 30-Day Access</span>
         </div>
     </div>
     """, unsafe_allow_html=True)
-    
-    # Stats Section
+
+    # Stats Section — real, non-fabricated facts about what the tool does
     col1, col2, col3, col4 = st.columns(4)
     with col1:
         st.markdown("""
         <div class="stat-card">
-            <div class="stat-number">94%</div>
-            <div class="stat-label">Win Rate</div>
+            <div class="stat-number">5</div>
+            <div class="stat-label">Indicators Analyzed</div>
         </div>
         """, unsafe_allow_html=True)
     with col2:
         st.markdown("""
         <div class="stat-card">
-            <div class="stat-number">2,500+</div>
-            <div class="stat-label">Active Traders</div>
+            <div class="stat-number">100+</div>
+            <div class="stat-label">Pairs Scanned</div>
         </div>
         """, unsafe_allow_html=True)
     with col3:
         st.markdown("""
         <div class="stat-card">
-            <div class="stat-number">1,000+</div>
-            <div class="stat-label">Coins Analyzed</div>
+            <div class="stat-number">4</div>
+            <div class="stat-label">Timeframes</div>
         </div>
         """, unsafe_allow_html=True)
     with col4:
         st.markdown("""
         <div class="stat-card">
-            <div class="stat-number">24/7</div>
-            <div class="stat-label">Market Scanning</div>
+            <div class="stat-number">30</div>
+            <div class="stat-label">Days Access</div>
         </div>
         """, unsafe_allow_html=True)
     
@@ -1056,101 +1077,82 @@ if not st.session_state.access_granted:
     
     st.markdown("---")
         
-    # Payment Section
+    # Payment Section — fully automated, no admin/Telegram step needed
     st.markdown("<div id='payment-section'></div>", unsafe_allow_html=True)
     st.markdown("## 🔐 Get Your Premium Access")
-    
+
     col1, col2 = st.columns([1.5, 1])
-    
+
     with col1:
-        st.markdown("### 📝 Simple 3-Step Process")
-        
+        st.markdown("### 📝 Simple 2-Step Process")
         st.markdown("""
         <div class="step-container">
             <div class="step-number">1</div>
             <div class="step-content">
-                <div class="step-title">Send Payment</div>
+                <div class="step-title">Get Your Unique Payment Amount</div>
                 <div class="step-description">
-                    Send exactly 30 USDT (BEP20) to the wallet address on the right.
+                    Click below to reserve a unique payment amount just for you (e.g. 30.0047 USDT) — this exact amount is how the system recognizes your payment automatically.
                 </div>
             </div>
         </div>
-        
+
         <div class="step-container">
             <div class="step-number">2</div>
             <div class="step-content">
-                <div class="step-title">Contact Admin</div>
+                <div class="step-title">Send It, and Wait a Moment</div>
                 <div class="step-description">
-                    Click the Telegram button below and send your transaction ID.
-                </div>
-            </div>
-        </div>
-        
-        <div class="step-container">
-            <div class="step-number">3</div>
-            <div class="step-content">
-                <div class="step-title">Get Access</div>
-                <div class="step-description">
-                    Receive your unique access password and start trading within 5 minutes!
+                    Send that exact amount on BEP20 to the address shown. Your access password appears automatically once the payment is confirmed on-chain — usually within a few minutes, no one to contact.
                 </div>
             </div>
         </div>
         """, unsafe_allow_html=True)
-        
-    
+
     with col2:
-        st.markdown("### 💳 Payment Details")
-        st.markdown("""
-        <div class="wallet-box">
-            <strong>Network:</strong> BEP20 (Binance Smart Chain)<br>
-            <strong>Amount:</strong> 30 USDT<br>
-            <strong>Wallet Address:</strong>
-            <div class="wallet-address-display">
-        """ + YOUR_WALLET + """
-            </div>
-            <button onclick="navigator.clipboard.writeText('""" + YOUR_WALLET + """')" style="
-                background: #667eea;
-                color: white;
-                padding: 10px 20px;
-                border: none;
-                border-radius: 8px;
-                cursor: pointer;
-                width: 100%;
-                font-weight: 600;
-            ">
-                📋 Copy Address
-            </button>
-            <p style="margin-top: 15px; font-size: 14px; color: #666;">
-                ⚠️ Send only USDT on BEP20 network. Other networks will result in loss of funds.
-            </p>
-            <p style="margin-top: 15px; font-size: 14px; color: #666;">
-                👌 After that contact admin, you immediate receive the password.
-            </p>
-        </div>
-        
-        """, unsafe_allow_html=True)
-        st.text("Or copy from here:")
-        st.code(YOUR_WALLET, language="text")
-    # Contact Admin Button
-        st.markdown("""
-        <a href="https://t.me/forexbigadmin" target="_blank" style="text-decoration: none;">
-            <button style="
-                background: linear-gradient(135deg, #0088cc 0%, #006699 100%);
-                color: white;
-                padding: 18px 40px;
-                border-radius: 50px;
-                font-size: 18px;
-                font-weight: 700;
-                border: none;
-                cursor: pointer;
-                width: 100%;
-                margin: 20px 0;
-                transition: transform 0.3s ease;
-            ">
-                📱 Contact Admin on Telegram
-            </button>
-        </a>
-        """, unsafe_allow_html=True)
+        if st.session_state.pending_request is None:
+            st.markdown("### Ready when you are")
+            if st.button("💳 Get My Payment Amount", use_container_width=True, type="primary"):
+                req = create_pending_request()
+                if req:
+                    st.session_state.pending_request = req
+                    st.rerun()
+                else:
+                    st.error("Couldn't reserve a payment slot — please try again in a moment.")
+        else:
+            req = check_request_status(st.session_state.pending_request["id"])
+
+            if req["status"] == "completed":
+                st.success("✅ Payment confirmed! Here's your access password:")
+                st.code(req["access_password"], language="text")
+                st.info("Copy this password and use the 'Already Have Access?' box below to unlock.")
+                if st.button("Start a new payment", use_container_width=True):
+                    st.session_state.pending_request = None
+                    st.rerun()
+
+            elif req["status"] == "expired":
+                st.warning("⏱️ This payment window expired without a matching payment.")
+                if st.button("🔁 Get a New Payment Amount", use_container_width=True):
+                    st.session_state.pending_request = None
+                    st.rerun()
+
+            else:
+                st.markdown(f"""
+                <div class="wallet-box">
+                    <strong>Network:</strong> BEP20 (Binance Smart Chain)<br>
+                    <strong>Send exactly:</strong> <span style="font-size: 20px; font-weight: 800;">{req['expected_amount']} USDT</span><br>
+                    <strong>Wallet Address:</strong>
+                    <div class="wallet-address-display">{YOUR_WALLET}</div>
+                    <p style="margin-top: 15px; font-size: 14px; color: #666;">
+                        ⚠️ Send exactly <strong>{req['expected_amount']} USDT</strong> — not a rounded 30. The exact amount is what identifies your payment automatically.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
+                st.code(YOUR_WALLET, language="text")
+                st.caption("Waiting for your payment to be detected on-chain — this page checks automatically.")
+                if st.button("🔄 Check Now", use_container_width=True):
+                    st.rerun()
+                # Light auto-poll while this tab stays open
+                time.sleep(15)
+                st.rerun()
     # Already have password
     st.markdown("---")
     st.markdown("### 🔑 Already Have Access?")
@@ -1167,67 +1169,50 @@ if not st.session_state.access_granted:
         col_a, col_b = st.columns(2)
         with col_a:
             if st.button("🔓 Unlock Premium Access", use_container_width=True, type="primary"):
-                admin_password = "%TYR&7ytr5"
-                
-                if access_password == admin_password:
+                valid, message, expires_at = verify_access_password(access_password)
+                if valid:
                     st.session_state.access_granted = True
-                    st.session_state.access_expiry = datetime.now() + timedelta(seconds=ACCESS_DURATION)
-                    st.success("✅ Admin access granted!")
+                    st.session_state.access_expiry = expires_at
+                    st.success("✅ Access granted! Welcome to Premium!")
                     st.balloons()
                     time.sleep(1)
                     st.rerun()
                 else:
-                    valid, message = st.session_state.password_manager.verify_password(access_password)
-                    if valid:
-                        st.session_state.access_granted = True
-                        st.session_state.access_expiry = datetime.now() + timedelta(seconds=ACCESS_DURATION)
-                        st.success("✅ Access granted! Welcome to Premium!")
-                        st.balloons()
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error(f"❌ {message}")
+                    st.error(f"❌ {message}")
         
-    # Testimonials
-    st.markdown("## ⭐ What Our Users Say")
-    
+    # What you actually get — honest description, no fabricated reviews
+    st.markdown("## 📋 What You Get")
+
     col1, col2, col3 = st.columns(3)
-    
+
     with col1:
         st.markdown("""
         <div class="testimonial-card">
             <div class="testimonial-text">
-                "I've tried many signal services, but Forex Big Bot is on another level. The accuracy is insane. Made back my investment in just 2 trades!"
-            </div>
-            <div class="testimonial-author">
-                — Michael R. • 3 months user
+                Live signals built from EMA, RSI, MACD, Bollinger Bands, and ATR — computed fresh from real exchange data every scan, not pre-written.
             </div>
         </div>
         """, unsafe_allow_html=True)
-    
+
     with col2:
         st.markdown("""
         <div class="testimonial-card">
             <div class="testimonial-text">
-                "The AI scanner finds opportunities I would never spot manually. Saved me hours of analysis every day. Best $30 I've ever spent."
-            </div>
-            <div class="testimonial-author">
-                — Sarah K. • Professional Trader
+                Every signal includes an entry price, stop-loss, and two take-profit levels with a computed risk/reward ratio — you decide what to do with them.
             </div>
         </div>
         """, unsafe_allow_html=True)
-    
+
     with col3:
         st.markdown("""
         <div class="testimonial-card">
             <div class="testimonial-text">
-                "Finally, signals I can actually trust. Clear entry and exit points. My portfolio is up 340% since I started using this."
-            </div>
-            <div class="testimonial-author">
-                — David L. • 6 months user
+                30 days of full access for a flat one-time fee. No balance, no fund custody — you trade with your own money on your own exchange account.
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+    st.caption("⚠️ Trading involves risk. Signals are generated from technical indicators and are not financial advice or a guarantee of profit.")
     
     st.markdown("---")
     # FAQ Section
@@ -1795,5 +1780,3 @@ st.markdown("""
     </p>
 </div>
 """, unsafe_allow_html=True)
-
-
