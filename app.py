@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 load_dotenv()
 
 # ===== PAYMENT CONFIGURATION =====
-YOUR_WALLET = os.getenv("YOUR_WALLET", "0x87ea9fc331bbe75fdae07f291046920b878e1367")
+YOUR_WALLET = os.getenv("YOUR_WALLET", "0xA6B72E65d66B4BaDa4D3c835278D74c6403A8616")
 ACCESS_DURATION = int(os.getenv("ACCESS_DURATION", 3092000))
 ACCESS_PRICE_USDT = 30
 
