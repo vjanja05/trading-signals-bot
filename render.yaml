@@ -9,3 +9,23 @@ services:
         value: 0x87ea9fc331bbe75fdae07f291046920b878e1367
       - key: ACCESS_DURATION
         value: "3092000"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+
+  - type: cron
+    name: signal-payment-worker
+    env: python
+    schedule: "*/5 * * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python worker.py
+    envVars:
+      - key: YOUR_WALLET
+        value: 0x87ea9fc331bbe75fdae07f291046920b878e1367
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: BSCSCAN_API_KEY
+        sync: false
